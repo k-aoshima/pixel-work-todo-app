@@ -4,13 +4,11 @@ import type React from "react";
 
 import { useState, useEffect, useRef, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/features/ui/button";
+import { Input } from "@/features/ui/input";
+import { Badge } from "@/features/ui/badge";
+import { Checkbox } from "@/features/ui/checkbox";
+import { ScrollArea } from "@/features/ui/scroll-area";
 import {
   Cat,
   Dog,
@@ -24,29 +22,28 @@ import {
   CheckSquare,
   FileCode,
   LogOut,
+  ChevronRight,
+  ChevronLeft,
+  MessageSquare,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { useToast } from "@/hooks/use-toast";
-import CatCharacter from "@/components/cat-character";
-import DogCharacter from "@/components/dog-character";
+import { cn } from "@/shared/lib/utils";
+import { useToast } from "@/shared/hooks/use-toast";
+import CatCharacter from "@/features/cat-character";
+import DogCharacter from "@/features/dog-character";
 import {
   analyzeMessage,
   updateCharacterAttitude,
   generateCharacterResponse,
-} from "@/lib/ai-utils";
+} from "@/shared/lib/ai-utils";
 import type {
   Task,
   Schedule,
   CharacterMood,
   CharacterType,
   Message,
-} from "@/../types";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+} from "@/shared/types";
+import { Popover, PopoverContent, PopoverTrigger } from "@/features/ui/popover";
+import { Calendar as CalendarComponent } from "@/features/ui/calendar";
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import {
@@ -55,9 +52,15 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from "@/features/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/features/ui/collapsible";
 
 export default function Home() {
+  // 状態変数は変更なし
   const [character, setCharacter] = useState<CharacterType>("cat");
   const [characterMood, setCharacterMood] = useState<CharacterMood>("happy");
   const [characterPersonality, setCharacterPersonality] =
@@ -65,7 +68,6 @@ export default function Home() {
   const [characterAttitude, setCharacterAttitude] =
     useState<string>("friendly");
   const [message, setMessage] = useState("");
-  const [messageIdCounter, setMessageIdCounter] = useState(1); // IDカウンターを追加
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -89,6 +91,14 @@ export default function Home() {
   const [showCommandList, setShowCommandList] = useState(false);
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // サイドパネルの表示状態
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  // タスク、スケジュール、コマンドの折りたたみ状態
+  const [tasksOpen, setTasksOpen] = useState(true);
+  const [schedulesOpen, setSchedulesOpen] = useState(true);
+  const [commandsOpen, setCommandsOpen] = useState(true);
 
   // メッセージ分析履歴
   const [messageAnalysisHistory, setMessageAnalysisHistory] = useState<
@@ -189,29 +199,21 @@ export default function Home() {
       setSetupStep(setupStep + 1);
 
       // キャラクターからの返答を追加
-      setMessages((prev) => {
-        // IDをインクリメント
-        const messageId1 = messageIdCounter.toString();
-        setMessageIdCounter(messageIdCounter + 1);
-        const messageId2 = messageIdCounter.toString();
-        setMessageIdCounter(messageIdCounter + 1);
-
-        return [
-          ...prev,
-          {
-            id: messageId1,
-            content: answer,
-            sender: "user",
-            timestamp: new Date(),
-          },
-          {
-            id: messageId2,
-            content: setupQuestions[setupStep + 1],
-            sender: "character",
-            timestamp: new Date(),
-          },
-        ];
-      });
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          content: answer,
+          sender: "user",
+          timestamp: new Date(),
+        },
+        {
+          id: (Date.now() + 1).toString(),
+          content: setupQuestions[setupStep + 1],
+          sender: "character",
+          timestamp: new Date(),
+        },
+      ]);
     } else {
       // 最後の質問（猫と犬の選択）で性格とキャラクターを決定
       const newCharacter = answer.includes("猫") ? "cat" : "dog";
@@ -266,7 +268,7 @@ export default function Home() {
     }
 
     // #scheduleが入力されたらスケジュールアシストを表示する準備
-    if (value === "#schedule" && !showScheduleAssist) {
+    if (value.includes("#schedule") && !showScheduleAssist) {
       setShowScheduleAssist(true);
     } else if (!value.startsWith("#schedule")) {
       setShowScheduleAssist(false);
@@ -500,6 +502,7 @@ export default function Home() {
       createdAt: new Date(),
     };
     setTasks((prev) => [...prev, newTask]);
+    setTasksOpen(true); // タスクを追加したら自動的に開く
   };
 
   // スケジュール追加
@@ -520,6 +523,7 @@ export default function Home() {
       createdAt: new Date(),
     };
     setSchedules((prev) => [...prev, newSchedule]);
+    setSchedulesOpen(true); // スケジュールを追加したら自動的に開く
   };
 
   // タスク完了
@@ -598,7 +602,9 @@ export default function Home() {
 
   // 自動スクロール
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
 
   // 初期メッセージ
@@ -673,430 +679,458 @@ export default function Home() {
   }
 
   return (
-    <div className="flex min-h-screen bg-background p-4">
-      <div className="flex flex-col w-full max-w-6xl mx-auto gap-4">
-        <header className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <Code className="h-6 w-6 text-primary" />
-            <h1 className="text-2xl font-bold tracking-tight text-primary">
-              PixelWork
-            </h1>
+    <div className="flex flex-col h-screen overflow-hidden bg-background relative">
+      {/* キャラクター表示エリア - 固定位置に配置 */}
+      <div className="fixed inset-0 w-full h-full z-0 bg-background flex items-center justify-center pointer-events-none">
+        <div
+          className={`flex flex-col items-center transition-all duration-300 pointer-events-auto ${
+            sidebarOpen ? "md:translate-x-[36px]" : "md:translate-x-[6px]"
+          }`}
+        >
+          <div className="character-container w-32 h-32 md:w-40 md:h-40 relative z-10">
+            {character === "cat" ? (
+              <CatCharacter mood={characterMood} />
+            ) : (
+              <DogCharacter mood={characterMood} />
+            )}
           </div>
-          <div className="flex items-center gap-2">
-            <div className="text-sm text-muted-foreground mr-2">
-              <span className="text-primary">@{username}</span>
+
+          <div className="text-center mt-4 bg-background/40 backdrop-blur-sm p-2 rounded-lg">
+            <h2 className="text-xl font-bold text-primary mb-2">
+              {character === "cat" ? "PixelCat" : "PixelDog"}
+            </h2>
+            <div className="flex flex-wrap gap-2 justify-center">
+              <Badge
+                variant="outline"
+                className="text-xs font-normal bg-secondary/80 text-foreground"
+              >
+                {characterPersonality === "energetic"
+                  ? "元気"
+                  : characterPersonality === "calm"
+                  ? "穏やか"
+                  : "フレンドリー"}
+              </Badge>
+              <Badge
+                variant="outline"
+                className="text-xs font-normal bg-secondary/80 text-foreground"
+              >
+                {getAttitudeText()}
+              </Badge>
+              <Badge
+                variant="outline"
+                className="text-xs font-normal bg-secondary/80 text-foreground"
+              >
+                {characterMood === "happy"
+                  ? "嬉しい"
+                  : characterMood === "sad"
+                  ? "悲しい"
+                  : characterMood === "angry"
+                  ? "怒り"
+                  : "普通"}
+              </Badge>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <header className="flex items-center justify-between p-4 border-b border-secondary relative z-20 bg-background/80 backdrop-blur-sm">
+        <div className="flex items-center gap-2">
+          <Code className="h-6 w-6 text-primary" />
+          <h1 className="text-2xl font-bold tracking-tight text-primary">
+            PixelWork
+          </h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="text-sm text-muted-foreground mr-2">
+            <span className="text-primary">@{username}</span>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setCharacter("cat")}
+            className={cn(character === "cat" && "bg-secondary text-primary")}
+          >
+            <Cat className="h-5 w-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setCharacter("dog")}
+            className={cn(character === "dog" && "bg-secondary text-primary")}
+          >
+            <Dog className="h-5 w-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="ml-2"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-5 w-5" />
+          </Button>
+        </div>
+      </header>
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* サイドパネル - 左側に配置 */}
+        <div
+          className={`border-b md:border-b-0 md:border-r border-secondary flex flex-col transition-all duration-300 relative z-20 bg-background/80 backdrop-blur-sm ${
+            sidebarOpen ? "w-full md:w-72" : "w-12"
+          }`}
+        >
+          <div className="flex items-center justify-between p-2 border-b border-secondary">
+            <h3
+              className={`text-sm font-medium ${
+                sidebarOpen ? "block" : "hidden"
+              }`}
+            >
+              管理パネル
+            </h3>
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setCharacter("cat")}
-              className={cn(character === "cat" && "bg-secondary text-primary")}
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="h-8 w-8"
             >
-              <Cat className="h-5 w-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setCharacter("dog")}
-              className={cn(character === "dog" && "bg-secondary text-primary")}
-            >
-              <Dog className="h-5 w-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="ml-2"
-              onClick={handleLogout}
-            >
-              <LogOut className="h-5 w-5" />
+              {sidebarOpen ? (
+                <ChevronLeft className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
             </Button>
           </div>
-        </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 flex-1">
-          {/* キャラクターセクション - 左側 */}
-          <div className="md:col-span-5 flex flex-col gap-6">
-            <Card className="border-secondary bg-card shadow-lg flex-1">
-              <CardContent className="p-6 flex flex-col items-center justify-center h-full">
-                <div className="character-container w-48 h-48 mb-4">
-                  {character === "cat" ? (
-                    <CatCharacter mood={characterMood} />
-                  ) : (
-                    <DogCharacter mood={characterMood} />
-                  )}
-                </div>
-
-                <div className="text-center mb-4">
-                  <h2 className="text-xl font-bold text-primary mb-2">
-                    {character === "cat" ? "PixelCat" : "PixelDog"}
-                  </h2>
-                  <div className="flex flex-wrap gap-2 justify-center">
-                    <Badge
-                      variant="outline"
-                      className="text-xs font-normal bg-secondary text-foreground"
-                    >
-                      {characterPersonality === "energetic"
-                        ? "元気"
-                        : characterPersonality === "calm"
-                        ? "穏やか"
-                        : "フレンドリー"}
-                    </Badge>
-                    <Badge
-                      variant="outline"
-                      className="text-xs font-normal bg-secondary text-foreground"
-                    >
-                      {getAttitudeText()}
-                    </Badge>
-                    <Badge
-                      variant="outline"
-                      className="text-xs font-normal bg-secondary text-foreground"
-                    >
-                      {characterMood === "happy"
-                        ? "嬉しい"
-                        : characterMood === "sad"
-                        ? "悲しい"
-                        : characterMood === "angry"
-                        ? "怒り"
-                        : "普通"}
-                    </Badge>
+          {sidebarOpen && (
+            <div className="flex-1 overflow-auto p-3 space-y-4">
+              {/* タスク - 折りたたみ可能 */}
+              <Collapsible
+                open={tasksOpen}
+                onOpenChange={setTasksOpen}
+                className="border border-secondary rounded-md overflow-hidden"
+              >
+                <CollapsibleTrigger className="flex items-center justify-between w-full p-2 bg-secondary/50 hover:bg-secondary text-sm font-medium">
+                  <div className="flex items-center gap-2">
+                    <CheckSquare className="h-4 w-4 text-primary" />
+                    <span>タスク</span>
                   </div>
-                </div>
-
-                <div className="character-speech-bubble w-full">
-                  {messages.length > 0 &&
-                    messages[messages.length - 1].sender === "character" && (
-                      <p className="text-sm whitespace-pre-wrap">
-                        {messages[messages.length - 1].content}
+                  <ChevronRight
+                    className={`h-4 w-4 transition-transform ${
+                      tasksOpen ? "rotate-90" : ""
+                    }`}
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="p-2">
+                  {tasks.length === 0 ? (
+                    <div className="text-xs text-muted-foreground text-center py-3">
+                      <p>
+                        タスクはまだありません。
+                        <br />
+                        <span className="text-primary">「#task タスク名」</span>
+                        で追加できます。
                       </p>
-                    )}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-secondary bg-card shadow-lg">
-              <CardHeader className="pb-2 border-b border-secondary">
-                <CardTitle className="text-lg font-medium flex items-center gap-2">
-                  <Terminal className="h-4 w-4 text-primary" />
-                  <span>コマンド</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                <div className="space-y-2 text-sm">
-                  {commands.map((cmd) => (
-                    <div
-                      key={cmd.id}
-                      className="flex items-center gap-2 p-2 hover:bg-secondary rounded cursor-pointer"
-                      onClick={() => insertCommand("#" + cmd.id)}
-                    >
-                      <div className="w-5 h-5 flex items-center justify-center text-primary">
-                        {cmd.icon}
-                      </div>
-                      <div className="flex-1">
-                        <span className="code-keyword">{cmd.id}</span> -{" "}
-                        {cmd.label.split(" - ")[1]}
-                      </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* メインコンテンツ - 右側 */}
-          <div className="md:col-span-7 flex flex-col gap-6">
-            <Card className="border-secondary bg-card shadow-lg flex-1">
-              <CardHeader className="pb-2 border-b border-secondary">
-                <CardTitle className="text-lg font-medium flex items-center gap-2">
-                  <FileCode className="h-4 w-4 text-primary" />
-                  <span>タスクとスケジュール</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Tabs defaultValue="tasks">
-                  <TabsList className="w-full rounded-none border-b border-secondary">
-                    <TabsTrigger
-                      value="tasks"
-                      className="flex-1 rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary"
-                    >
-                      タスク
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="schedule"
-                      className="flex-1 rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:text-primary"
-                    >
-                      スケジュール
-                    </TabsTrigger>
-                  </TabsList>
-                  <TabsContent value="tasks" className="p-4">
-                    {tasks.length === 0 ? (
-                      <div className="text-sm text-muted-foreground text-center py-6 flex flex-col items-center gap-2">
-                        <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
-                          <Plus className="h-5 w-5 text-primary" />
-                        </div>
-                        <p>
-                          タスクはまだありません。
-                          <br />
-                          <span className="text-primary">
-                            「#task タスク名」
-                          </span>
-                          で追加できます。
-                        </p>
-                      </div>
-                    ) : (
-                      <ul className="space-y-1">
-                        {tasks
-                          .filter((task) => !task.completed)
-                          .map((task) => (
-                            <li
-                              key={task.id}
-                              className="task-item flex items-center gap-2 p-2 rounded-md"
-                            >
-                              <Checkbox
-                                id={task.id}
-                                checked={task.completed}
-                                onCheckedChange={() => completeTask(task.title)}
-                                className="border-muted-foreground data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                              />
-                              <label
-                                htmlFor={task.id}
-                                className="text-sm flex-1 cursor-pointer"
-                              >
-                                {task.title}
-                              </label>
-                            </li>
-                          ))}
-                      </ul>
-                    )}
-                  </TabsContent>
-                  <TabsContent value="schedule" className="p-4">
-                    {schedules.length === 0 ? (
-                      <div className="text-sm text-muted-foreground text-center py-6 flex flex-col items-center gap-2">
-                        <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center">
-                          <Calendar className="h-5 w-5 text-primary" />
-                        </div>
-                        <p>
-                          予定はまだありません。
-                          <br />
-                          <span className="text-primary">
-                            「#schedule 日付 時間 予定名」
-                          </span>
-                          で追加できます。
-                        </p>
-                      </div>
-                    ) : (
-                      <ul className="space-y-1">
-                        {schedules.map((schedule) => (
+                  ) : (
+                    <ul className="space-y-1">
+                      {tasks
+                        .filter((task) => !task.completed)
+                        .map((task) => (
                           <li
-                            key={schedule.id}
-                            className="task-item flex items-start gap-2 p-2 rounded-md"
+                            key={task.id}
+                            className="task-item flex items-center gap-2 p-2 rounded-md"
                           >
-                            <Clock className="h-4 w-4 mt-0.5 text-primary" />
-                            <div className="text-sm flex-1">
-                              <div className="font-medium">
-                                {schedule.title}
-                              </div>
-                              <div className="text-muted-foreground">
-                                {schedule.date.toLocaleDateString()}{" "}
-                                {schedule.time}
-                              </div>
-                            </div>
+                            <Checkbox
+                              id={task.id}
+                              checked={task.completed}
+                              onCheckedChange={() => completeTask(task.title)}
+                              className="border-muted-foreground data-[state=checked]:bg-primary data-[state=checked]:border-primary"
+                            />
+                            <label
+                              htmlFor={task.id}
+                              className="text-xs flex-1 cursor-pointer"
+                            >
+                              {task.title}
+                            </label>
                           </li>
                         ))}
-                      </ul>
-                    )}
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
+                    </ul>
+                  )}
+                </CollapsibleContent>
+              </Collapsible>
 
-            <Card className="border-secondary bg-card shadow-lg">
-              <CardHeader className="pb-2 border-b border-secondary">
-                <CardTitle className="text-lg font-medium flex items-center gap-2">
-                  <Terminal className="h-4 w-4 text-primary" />
-                  <span>ターミナル</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-4">
-                <ScrollArea className="h-[200px] pr-4">
-                  <div className="space-y-3">
-                    {messages.map((msg) => (
-                      <div key={msg.id} className="text-sm">
-                        {msg.sender === "user" ? (
-                          <div className="terminal-prompt">
-                            <span className="text-foreground">
-                              {msg.content}
-                            </span>
+              {/* スケジュール - 折りたたみ可能 */}
+              <Collapsible
+                open={schedulesOpen}
+                onOpenChange={setSchedulesOpen}
+                className="border border-secondary rounded-md overflow-hidden"
+              >
+                <CollapsibleTrigger className="flex items-center justify-between w-full p-2 bg-secondary/50 hover:bg-secondary text-sm font-medium">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="h-4 w-4 text-primary" />
+                    <span>スケジュール</span>
+                  </div>
+                  <ChevronRight
+                    className={`h-4 w-4 transition-transform ${
+                      schedulesOpen ? "rotate-90" : ""
+                    }`}
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="p-2">
+                  {schedules.length === 0 ? (
+                    <div className="text-xs text-muted-foreground text-center py-3">
+                      <p>
+                        予定はまだありません。
+                        <br />
+                        <span className="text-primary">
+                          「#schedule 日付 時間 予定名」
+                        </span>
+                        で追加できます。
+                      </p>
+                    </div>
+                  ) : (
+                    <ul className="space-y-1">
+                      {schedules.map((schedule) => (
+                        <li
+                          key={schedule.id}
+                          className="task-item flex items-start gap-2 p-2 rounded-md"
+                        >
+                          <Clock className="h-3 w-3 mt-0.5 text-primary" />
+                          <div className="text-xs flex-1">
+                            <div className="font-medium">{schedule.title}</div>
+                            <div className="text-muted-foreground">
+                              {schedule.date.toLocaleDateString()}{" "}
+                              {schedule.time}
+                            </div>
                           </div>
-                        ) : (
-                          <div className="pl-2 border-l-2 border-primary">
-                            <span className="text-muted-foreground text-xs">
-                              {msg.timestamp.toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </span>
-                            <p className="whitespace-pre-wrap">{msg.content}</p>
-                          </div>
-                        )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </CollapsibleContent>
+              </Collapsible>
+
+              {/* コマンド - 折りたたみ可能 */}
+              <Collapsible
+                open={commandsOpen}
+                onOpenChange={setCommandsOpen}
+                className="border border-secondary rounded-md overflow-hidden"
+              >
+                <CollapsibleTrigger className="flex items-center justify-between w-full p-2 bg-secondary/50 hover:bg-secondary text-sm font-medium">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="h-4 w-4 text-primary" />
+                    <span>コマンド</span>
+                  </div>
+                  <ChevronRight
+                    className={`h-4 w-4 transition-transform ${
+                      commandsOpen ? "rotate-90" : ""
+                    }`}
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="p-2">
+                  <div className="space-y-1 text-xs">
+                    {commands.map((cmd) => (
+                      <div
+                        key={cmd.id}
+                        className="flex items-center gap-2 p-2 hover:bg-secondary rounded cursor-pointer"
+                        onClick={() => insertCommand("#" + cmd.id)}
+                      >
+                        <div className="w-4 h-4 flex items-center justify-center text-primary">
+                          {cmd.icon}
+                        </div>
+                        <div className="flex-1">
+                          <span className="code-keyword">{cmd.id}</span> -{" "}
+                          {cmd.label.split(" - ")[1]}
+                        </div>
                       </div>
                     ))}
-                    <div ref={messagesEndRef} />
                   </div>
-                </ScrollArea>
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+          )}
+        </div>
 
-                {showScheduleAssist ? (
-                  <div className="w-full space-y-4 bg-secondary p-4 rounded-lg mt-4 border border-muted">
-                    <h3 className="font-medium text-sm text-primary">
-                      スケジュール登録
-                    </h3>
+        {/* 中央のスペース */}
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-1 block">
-                          日付
-                        </label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className="w-full justify-start text-left font-normal text-sm bg-card border-muted"
-                            >
-                              <Calendar className="mr-2 h-4 w-4 text-primary" />
-                              {scheduleDate
-                                ? format(scheduleDate, "yyyy/MM/dd", {
-                                    locale: ja,
-                                  })
-                                : "日付を選択"}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0 bg-card border-muted">
-                            <CalendarComponent
-                              mode="single"
-                              selected={scheduleDate}
-                              onSelect={setScheduleDate}
-                              initialFocus
-                              className="bg-card text-foreground"
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-
-                      <div>
-                        <label className="text-xs text-muted-foreground mb-1 block">
-                          時間
-                        </label>
-                        <Select
-                          value={scheduleTime}
-                          onValueChange={setScheduleTime}
-                        >
-                          <SelectTrigger className="text-sm bg-card border-muted">
-                            <SelectValue placeholder="時間を選択" />
-                          </SelectTrigger>
-                          <SelectContent className="bg-card border-muted">
-                            {timeOptions.map((time) => (
-                              <SelectItem key={time} value={time}>
-                                {time}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-xs text-muted-foreground mb-1 block">
-                        タイトル
-                      </label>
-                      <Input
-                        value={scheduleTitle}
-                        onChange={(e) => setScheduleTitle(e.target.value)}
-                        placeholder="予定のタイトルを入力"
-                        className="text-sm bg-card border-muted"
-                      />
-                    </div>
-
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowScheduleAssist(false)}
-                        className="text-xs border-muted"
-                      >
-                        キャンセル
-                      </Button>
-                      <Button
-                        onClick={confirmSchedule}
-                        className="text-xs bg-primary text-primary-foreground hover:bg-primary/90"
-                      >
-                        登録
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <form
-                    className="flex w-full gap-2 relative mt-4"
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      sendMessage();
-                    }}
-                  >
-                    <div className="relative flex-1 terminal-prompt">
-                      <Input
-                        ref={inputRef}
-                        value={message}
-                        onChange={handleInputChange}
-                        onKeyDown={handleKeyDown}
-                        placeholder={
-                          setupComplete
-                            ? "コマンドまたはメッセージを入力..."
-                            : "回答を入力..."
-                        }
-                        className="terminal-input pl-6 border-muted bg-secondary"
-                      />
-                      {showCommandList && (
-                        <div className="absolute top-full left-0 w-full mt-1 bg-card rounded-md border border-muted shadow-lg z-10">
-                          <div className="p-2">
-                            <h4 className="text-xs font-medium text-primary mb-2">
-                              コマンド
-                            </h4>
-                            <ul className="space-y-1">
-                              {commands.map((command, index) => (
-                                <li key={command.id}>
-                                  <button
-                                    className={`w-full text-left px-2 py-1 text-sm rounded flex items-center gap-2 ${
-                                      selectedCommandIndex === index
-                                        ? "bg-secondary text-primary"
-                                        : "hover:bg-secondary/50"
-                                    }`}
-                                    onClick={() =>
-                                      insertCommand("#" + command.id)
-                                    }
-                                  >
-                                    <Hash className="h-3 w-3" />
-                                    <span className="code-keyword">
-                                      {command.id}
-                                    </span>
-                                    <span className="text-muted-foreground">
-                                      {" "}
-                                      - {command.label.split(" - ")[1]}
-                                    </span>
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
+        {/* チャット部分 - 右側に配置 */}
+        <div className="flex-1 flex flex-col overflow-hidden border-l border-secondary">
+          {/* 会話表示エリア - 固定高さでスクロール可能に */}
+          <div className="flex-1 flex flex-col h-full">
+            <div className="flex items-center justify-between p-4 pb-2">
+              <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                <MessageSquare className="h-4 w-4" />
+                <span>会話</span>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden flex flex-col">
+              <ScrollArea className="flex-1 h-[calc(100vh-180px)]">
+                <div className="space-y-2 p-4 flex flex-col items-end">
+                  {messages.map((msg, index) => (
+                    <div
+                      key={`${msg.id}-${index}`}
+                      className="text-sm max-w-[90%]"
+                    >
+                      {msg.sender === "user" ? (
+                        <div className="text-right">
+                          <p className="text-foreground">{msg.content}</p>
+                        </div>
+                      ) : (
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">
+                            {msg.timestamp.toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </p>
+                          <p className="whitespace-pre-wrap text-foreground">
+                            {msg.content}
+                          </p>
                         </div>
                       )}
                     </div>
+                  ))}
+                  <div ref={messagesEndRef} />
+                </div>
+              </ScrollArea>
+            </div>
+
+            {/* 入力欄 - チャットエリアの下部に配置 */}
+            <div className="border-t border-secondary relative z-20 bg-background/80 backdrop-blur-sm">
+              {showScheduleAssist ? (
+                <div className="p-2 bg-secondary border-t border-muted">
+                  <div className="flex flex-wrap gap-2 items-end">
+                    <div className="flex-1 min-w-[120px]">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full justify-start text-left font-normal text-xs bg-card border-muted"
+                          >
+                            <Calendar className="mr-1 h-3 w-3 text-primary" />
+                            {scheduleDate
+                              ? format(scheduleDate, "yyyy/MM/dd", {
+                                  locale: ja,
+                                })
+                              : "日付を選択"}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0 bg-card border-muted">
+                          <CalendarComponent
+                            mode="single"
+                            selected={scheduleDate}
+                            onSelect={setScheduleDate}
+                            initialFocus
+                            className="bg-card text-foreground"
+                          />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div className="flex-1 min-w-[100px]">
+                      <Select
+                        value={scheduleTime}
+                        onValueChange={setScheduleTime}
+                      >
+                        <SelectTrigger className="text-xs h-8 bg-card border-muted">
+                          <SelectValue placeholder="時間" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-card border-muted">
+                          {timeOptions.map((time) => (
+                            <SelectItem key={time} value={time}>
+                              {time}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex-[2] min-w-[180px]">
+                      <Input
+                        value={scheduleTitle}
+                        onChange={(e) => setScheduleTitle(e.target.value)}
+                        placeholder="予定のタイトル"
+                        className="text-xs h-8 bg-card border-muted"
+                      />
+                    </div>
                     <Button
-                      type="submit"
-                      className="bg-primary text-primary-foreground hover:bg-primary/90"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowScheduleAssist(false)}
+                      className="text-xs border-muted"
                     >
-                      <Send className="h-4 w-4" />
+                      キャンセル
                     </Button>
-                  </form>
-                )}
-              </CardContent>
-            </Card>
+                    <Button
+                      size="sm"
+                      onClick={confirmSchedule}
+                      className="text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                    >
+                      登録
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <form
+                  className="flex items-center gap-1 px-4 py-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    sendMessage();
+                  }}
+                >
+                  <div className="relative flex-1">
+                    <Input
+                      ref={inputRef}
+                      value={message}
+                      onChange={handleInputChange}
+                      onKeyDown={handleKeyDown}
+                      placeholder={
+                        setupComplete ? "メッセージを入力..." : "回答を入力..."
+                      }
+                      className="border border-muted bg-background/50 focus-visible:ring-1 focus-visible:ring-primary h-10 text-sm rounded-full pl-4 pr-10"
+                    />
+                    {showCommandList && (
+                      <div className="absolute top-auto bottom-full left-0 w-full mb-1 bg-card rounded-md border border-muted shadow-lg z-10">
+                        <div className="p-2">
+                          <h4 className="text-xs font-medium text-primary mb-1">
+                            コマンド
+                          </h4>
+                          <ul className="space-y-1">
+                            {commands.map((command, index) => (
+                              <li key={command.id}>
+                                <button
+                                  className={`w-full text-left px-2 py-1 text-xs rounded flex items-center gap-2 ${
+                                    selectedCommandIndex === index
+                                      ? "bg-secondary text-primary"
+                                      : "hover:bg-secondary/50"
+                                  }`}
+                                  onClick={() =>
+                                    insertCommand("#" + command.id)
+                                  }
+                                >
+                                  <Hash className="h-3 w-3" />
+                                  <span className="code-keyword">
+                                    {command.id}
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    {" "}
+                                    - {command.label.split(" - ")[1]}
+                                  </span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    type="submit"
+                    size="icon"
+                    className="h-10 w-10 rounded-full bg-primary text-primary-foreground hover:bg-primary/90"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </form>
+              )}
+            </div>
           </div>
         </div>
       </div>

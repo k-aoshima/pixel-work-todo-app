@@ -2,7 +2,7 @@
 
 import type React from "react";
 import { useEffect, useState } from "react";
-import type { CharacterMood } from "@/../types";
+import type { CharacterMood } from "@/shared/types";
 
 interface DogCharacterProps {
   mood: CharacterMood;
