@@ -20,6 +20,38 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Proposed Project Structure
+
+Based on the [Bulletproof React](https://github.com/alan2207/bulletproof-react/blob/master/docs/project-structure.md) guidelines, the following structure is suggested:
+
+```
+app/
+src/
+  features/
+    ui/
+      badge.tsx
+      button.tsx
+      calendar.tsx
+      card.tsx
+      checkbox.tsx
+      collapsible.tsx
+      input.tsx
+      popover.tsx
+      scroll-area.tsx
+      select.tsx
+      tabs.tsx
+      toast.tsx
+  shared/
+    hooks/
+      use-mobile.tsx
+      use-toast.ts
+    lib/
+      ai-utils.ts
+      utils.ts
+    types/
+      index.ts
+```
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
