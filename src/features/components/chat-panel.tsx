@@ -16,13 +16,12 @@ import {
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import type { Message } from "@/shared/types";
-import type { KeyboardEvent, RefObject } from "react";
+import type { KeyboardEvent, RefObject, JSX } from "react";
 
 interface ChatPanelProps {
   messages: Message[];
   messagesEndRef: RefObject<HTMLDivElement | null>;
   message: string;
-  setMessage: (message: string) => void;
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   sendMessage: () => void;
@@ -52,7 +51,6 @@ export function ChatPanel({
   messages,
   messagesEndRef,
   message,
-  setMessage,
   handleInputChange,
   handleKeyDown,
   sendMessage,
@@ -86,10 +84,7 @@ export function ChatPanel({
           <ScrollArea className="flex-1 h-[calc(100vh-180px)]">
             <div className="space-y-2 p-4 flex flex-col items-end">
               {messages.map((msg, index) => (
-                <div
-                  key={`${msg.id}-${index}`}
-                  className="text-sm max-w-[90%]"
-                >
+                <div key={`${msg.id}-${index}`} className="text-sm max-w-[90%]">
                   {msg.sender === "user" ? (
                     <div className="text-right">
                       <p className="text-foreground">{msg.content}</p>
@@ -146,10 +141,7 @@ export function ChatPanel({
                   </Popover>
                 </div>
                 <div className="flex-1 min-w-[100px]">
-                  <Select
-                    value={scheduleTime}
-                    onValueChange={setScheduleTime}
-                  >
+                  <Select value={scheduleTime} onValueChange={setScheduleTime}>
                     <SelectTrigger className="text-xs h-8 bg-card border-muted">
                       <SelectValue placeholder="時間" />
                     </SelectTrigger>
@@ -224,9 +216,7 @@ export function ChatPanel({
                               onClick={() => insertCommand("#" + command.id)}
                             >
                               <Hash className="h-3 w-3" />
-                              <span className="code-keyword">
-                                {command.id}
-                              </span>
+                              <span className="code-keyword">{command.id}</span>
                               <span className="text-muted-foreground">
                                 {" "}
                                 - {command.label.split(" - ")[1]}

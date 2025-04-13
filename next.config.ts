@@ -1,7 +1,7 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  basePath: '/pixel-work',
-  assetPrefix: '/pixel-work/',
+import type { NextConfig } from 'next'
+
+const nextConfig: NextConfig = {
+  // 開発環境では basePath と assetPrefix を無効化
 }
 
-module.exports = nextConfig
+export default nextConfig

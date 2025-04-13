@@ -1,14 +1,11 @@
 "use client";
 
-import type React from "react";
-
-import { useState, useEffect, useRef, type KeyboardEvent } from "react";
+import { useState, useEffect, useRef, useMemo, type KeyboardEvent } from "react";
 import { Code, Plus, Calendar, Terminal, CheckSquare } from "lucide-react";
 import { AppHeader } from "@/features/components/app-header";
 import { AdminPanel } from "@/features/components/admin-panel";
 import { ChatPanel } from "@/features/components/chat-panel";
 import { CharacterDisplay } from "@/features/components/character-display";
-import { useToast } from "@/shared/hooks/use-toast";
 import { useAuth } from "@/shared/hooks/use-auth";
 import { useCharacter } from "@/shared/hooks/use-character";
 import { useScheduleAssist } from "@/shared/hooks/use-schedule-assist";
@@ -20,11 +17,8 @@ import {
 import type {
   Task,
   Schedule,
-  CharacterMood,
-  CharacterType,
   Message,
 } from "@/shared/types";
-import { format } from "date-fns";
 
 export default function Home() {
   const {
@@ -57,7 +51,6 @@ export default function Home() {
   const [setupAnswers, setSetupAnswers] = useState<string[]>([]);
   const { isLoggedIn, username, handleLogout } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const { toast } = useToast();
 
   const [showCommandList, setShowCommandList] = useState(false);
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
@@ -104,12 +97,12 @@ export default function Home() {
   >([]);
 
   // 初期設定の質問
-  const setupQuestions = [
+  const setupQuestions = useMemo(() => [
     "朝は得意？それとも夜が好き？",
     "どんなタイプの仕事が好き？",
     "最近、楽しいと感じたのはどんな時？",
     "猫と犬、どちらが好き？",
-  ];
+  ], []);
 
   // 初期設定の回答を処理
   const handleSetupAnswer = (answer: string) => {
@@ -468,7 +461,7 @@ export default function Home() {
         },
       ]);
     }
-  }, []);
+  }, [setupComplete, setupStep, messages.length, setupQuestions]);
 
   // ログインしていない場合はローディング表示
   if (!isLoggedIn) {
@@ -517,7 +510,6 @@ export default function Home() {
           messages={messages}
           messagesEndRef={messagesEndRef}
           message={message}
-          setMessage={setMessage}
           handleInputChange={handleInputChange}
           handleKeyDown={handleKeyDown}
           sendMessage={sendMessage}
