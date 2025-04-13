@@ -9,7 +9,7 @@ import { createClient } from "@/app/utils/supabase/client"; // Corrected path
 import { AuthLayout } from "@/features/components/auth-layout";
 import { TerminalForm } from "@/features/components/terminal-form";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -19,12 +19,11 @@ export default function LoginPage() {
   // Revert: Call createClient directly
   const supabase = createClient();
 
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleRegister = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    // 入力検証
     if (!username || !password) {
       setError("メールアドレスとパスワードを入力してください");
       setLoading(false);
@@ -32,25 +31,25 @@ export default function LoginPage() {
     }
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signUp({
         email: username,
         password: password,
+        options: {
+          emailRedirectTo: `${location.origin}/api/auth/callback`,
+        },
       });
 
       if (error) {
-        console.error("ログインエラー:", error);
         setError(error.message);
       } else {
         toast({
-          title: "ログイン成功",
-          description: "PixelWorkへようこそ！",
+          title: "登録成功",
+          description: "登録確認メールを送信しました",
         });
-        router.refresh(); // セッションを更新
-        await new Promise((resolve) => setTimeout(resolve, 500)); // リダイレクト前に少し待機
-        router.push("/");
+        router.push("/login");
       }
     } catch (err) {
-      setError("ログイン処理中にエラーが発生しました");
+      setError("登録処理中にエラーが発生しました");
       console.error(err);
     } finally {
       setLoading(false);
@@ -74,7 +73,7 @@ export default function LoginPage() {
       onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
         setPassword(e.target.value),
       placeholder: "パスワード",
-      autoComplete: "current-password",
+      autoComplete: "new-password",
       type: "password",
       disabled: loading,
     },
@@ -83,25 +82,19 @@ export default function LoginPage() {
   return (
     <AuthLayout>
       <TerminalForm
-        title="login.sh"
+        title="register.sh"
         error={error}
         inputs={inputs}
-        onSubmit={handleLogin}
-        submitText="ログイン"
+        onSubmit={handleRegister}
+        submitText="新規登録"
         loading={loading}
       >
-        <div className="flex justify-between w-full text-xs">
+        <div className="flex justify-end w-full text-xs">
           <Link
-            href="/reset-password"
+            href="/login"
             className="text-muted-foreground hover:text-primary"
           >
-            パスワードを忘れた場合
-          </Link>
-          <Link
-            href="/register"
-            className="text-muted-foreground hover:text-primary"
-          >
-            新規登録はこちら
+            アカウントをお持ちの方はこちら
           </Link>
         </div>
       </TerminalForm>
