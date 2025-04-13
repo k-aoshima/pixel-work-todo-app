@@ -8,10 +8,8 @@ export function useAuth() {
   const [username, setUsername] = useState("");
   const router = useRouter();
   const { toast } = useToast();
-  // Pass env vars to createClient
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  // Revert: Call createClient directly
+  const supabase = createClient();
 
   useEffect(() => {
     const checkAuth = async () => {
