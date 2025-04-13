@@ -16,13 +16,12 @@ import {
 import { format } from "date-fns";
 import { ja } from "date-fns/locale";
 import type { Message } from "@/shared/types";
-import type { KeyboardEvent, RefObject } from "react";
+import type { KeyboardEvent, RefObject, JSX } from "react";
 
 interface ChatPanelProps {
   messages: Message[];
   messagesEndRef: RefObject<HTMLDivElement | null>;
   message: string;
-  setMessage: (message: string) => void;
   handleInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   handleKeyDown: (e: KeyboardEvent<HTMLInputElement>) => void;
   sendMessage: () => void;
@@ -52,7 +51,6 @@ export function ChatPanel({
   messages,
   messagesEndRef,
   message,
-  setMessage,
   handleInputChange,
   handleKeyDown,
   sendMessage,
