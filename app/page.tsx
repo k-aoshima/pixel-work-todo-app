@@ -20,11 +20,8 @@ import {
 import type {
   Task,
   Schedule,
-  CharacterMood,
-  CharacterType,
   Message,
 } from "@/shared/types";
-import { format } from "date-fns";
 
 export default function Home() {
   const {
@@ -57,7 +54,6 @@ export default function Home() {
   const [setupAnswers, setSetupAnswers] = useState<string[]>([]);
   const { isLoggedIn, username, handleLogout } = useAuth();
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const { toast } = useToast();
 
   const [showCommandList, setShowCommandList] = useState(false);
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
@@ -468,7 +464,7 @@ export default function Home() {
         },
       ]);
     }
-  }, []);
+  }, [setupComplete, setupStep, messages.length, setupQuestions]);
 
   // ログインしていない場合はローディング表示
   if (!isLoggedIn) {
