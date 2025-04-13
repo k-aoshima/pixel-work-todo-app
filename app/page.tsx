@@ -510,7 +510,6 @@ export default function Home() {
           messages={messages}
           messagesEndRef={messagesEndRef}
           message={message}
-          setMessage={setMessage}
           handleInputChange={handleInputChange}
           handleKeyDown={handleKeyDown}
           sendMessage={sendMessage}
