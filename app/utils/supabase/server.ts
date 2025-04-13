@@ -29,8 +29,9 @@ export const createClient = (cookieStore: ReadonlyRequestCookies) => {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
-            );
-          } catch (error) {
+            )
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          } catch (error) { // Revert back to error and place disable comment before
             // The `setAll` method was called from a Server Component.
             // This can be ignored if you have middleware refreshing sessions.
           }
