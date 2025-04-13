@@ -2,6 +2,7 @@
   "name": "pixel-work",
   "version": "0.1.0",
   "private": true,
+  "homepage": "/pixel-work",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
