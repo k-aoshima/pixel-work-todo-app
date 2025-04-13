@@ -5,20 +5,24 @@ import type { Database } from "@/app/types/database.types"; // Keep existing ali
 // Note: This function now expects the cookie store to be passed in.
 // You'll need to call cookies() from next/headers in the Server Component
 // or Route Handler where you use this function.
-export const createClient = (cookieStore: ReadonlyRequestCookies) => {
-  // Move env var check inside the function
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Also accept URL and Key as arguments
+export const createClient = (
+  cookieStore: ReadonlyRequestCookies,
+  supabaseUrl: string,
+  supabaseAnonKey: string
+) => {
+  // Remove env var access from here
 
   if (!supabaseUrl || !supabaseAnonKey) {
+    // Check arguments instead
     throw new Error(
       "Missing env.NEXT_PUBLIC_SUPABASE_URL or env.NEXT_PUBLIC_SUPABASE_ANON_KEY"
     );
   }
 
   return createServerClient<Database>( // Keep generic type if needed, or remove if causing issues
-    supabaseUrl,
-    supabaseAnonKey,
+    supabaseUrl, // Use argument
+    supabaseAnonKey, // Use argument
     {
       cookies: {
         // Use getAll to retrieve all cookies
