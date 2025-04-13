@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from "react"; // useCallbackを追加
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/shared/hooks/use-toast";
 import { createClient } from "@/app/utils/supabase/client";
-import type { User } from "@supabase/supabase-js"; // User型をインポート
+import type { User, Session } from "@supabase/supabase-js"; // Session型を追加
+import { AuthError } from "@supabase/supabase-js"; // AuthErrorをインポート
+
 export function useAuth() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [username, setUsername] = useState("");
@@ -12,7 +14,7 @@ export function useAuth() {
   const supabase = createClient();
 
   // 認証状態を更新する関数 (useCallbackでメモ化)
-  const updateAuthState = useCallback((session: any) => { // sessionの型をanyに変更 (より柔軟に対応)
+  const updateAuthState = useCallback((session: Session | null) => { // sessionの型を Session | null に変更
     if (session?.user) {
       setIsLoggedIn(true);
       setUsername(session.user.email || "");
@@ -75,9 +77,10 @@ export function useAuth() {
       });
       // 状態更新は onAuthStateChange に任せる
       // router.push("/login"); // リダイレクトも onAuthStateChange で処理される
-    } catch (error: any) { // エラーの型を any に変更
+    } catch (error: unknown) { // エラーの型を unknown に変更
       // AuthSessionMissingError の場合は警告のみ表示し、トーストは出さない (セッションがないのは期待される場合もある)
-      if (error.name === 'AuthSessionMissingError') {
+      // AuthError のインスタンスか確認し、name プロパティで判定
+      if (error instanceof AuthError && error.name === 'AuthSessionMissingError') {
          console.warn("Supabase signOut failed: Auth session missing. State might be out of sync or already logged out.");
          // 状態が不整合の場合に備えてクリアし、リダイレクトを試みる
          updateAuthState(null);
@@ -86,10 +89,12 @@ export function useAuth() {
          }
       } else {
         // その他のエラーはコンソールに出力し、トーストでユーザーに通知
+        // error が Error インスタンスか確認してから message を参照
+        const errorMessage = error instanceof Error ? error.message : "ログアウト中に不明なエラーが発生しました。";
         console.error("ログアウトエラー:", error);
         toast({
           title: "エラー",
-          description: error.message || "ログアウト中にエラーが発生しました。", // エラーメッセージを表示
+          description: errorMessage,
           variant: "destructive",
         });
       }
