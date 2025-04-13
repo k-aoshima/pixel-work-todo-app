@@ -17,48 +17,42 @@ import { Code, Lock, AlertCircle } from "lucide-react";
 import { useToast } from "@/shared/hooks/use-toast";
 import { createClient } from "@/utils/supabase/client";
 
-export default function LoginPage() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+export default function ResetPasswordPage() {
+  const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
   const { toast } = useToast();
   const supabase = createClient();
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    // 入力検証
-    if (!username || !password) {
-      setError("メールアドレスとパスワードを入力してください");
+    if (!email) {
+      setError("メールアドレスを入力してください");
       setLoading(false);
       return;
     }
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: username,
-        password: password,
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/api/auth/callback`,
       });
 
       if (error) {
-        console.error("ログインエラー:", error);
+        console.error("パスワードリセットエラー:", error);
         setError(error.message);
       } else {
-        console.log("ログイン成功:", data);
         toast({
-          title: "ログイン成功",
-          description: "PixelWorkへようこそ！",
+          title: "メール送信完了",
+          description: "パスワードリセット用のメールを送信しました。",
         });
-        router.refresh(); // セッションを更新
-        await new Promise(resolve => setTimeout(resolve, 500)); // リダイレクト前に少し待機
-        router.push("/");
+        router.push("/login");
       }
     } catch (err) {
-      setError("ログイン処理中にエラーが発生しました");
+      setError("パスワードリセット処理中にエラーが発生しました");
       console.error(err);
     } finally {
       setLoading(false);
@@ -84,11 +78,11 @@ export default function LoginPage() {
           <CardHeader className="pb-2 border-b border-secondary">
             <CardTitle className="text-lg font-medium flex items-center gap-2">
               <Lock className="h-4 w-4 text-primary" />
-              <span>ログイン</span>
+              <span>パスワードをリセット</span>
             </CardTitle>
           </CardHeader>
 
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleResetPassword}>
             <CardContent className="pt-6 pb-4 space-y-4">
               {error && (
                 <div className="bg-secondary/50 p-3 rounded-md flex items-start gap-2 text-destructive text-sm">
@@ -102,7 +96,7 @@ export default function LoginPage() {
                   <span className="w-3 h-3 rounded-full bg-destructive"></span>
                   <span className="w-3 h-3 rounded-full bg-muted"></span>
                   <span className="w-3 h-3 rounded-full bg-primary"></span>
-                  <span className="flex-1 text-center">login.sh</span>
+                  <span className="flex-1 text-center">reset-password.sh</span>
                 </div>
 
                 <div className="space-y-4">
@@ -112,33 +106,21 @@ export default function LoginPage() {
                       <span className="text-muted-foreground">email:</span>
                     </div>
                     <Input
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="メールアドレス"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="登録したメールアドレス"
                       className="terminal-input bg-secondary border-muted"
                       autoComplete="email"
                       disabled={loading}
                     />
                   </div>
-
-                  <div className="space-y-2">
-                    <div className="terminal-line flex items-center gap-2">
-                      <span className="text-primary">$</span>
-                      <span className="text-muted-foreground">password:</span>
-                    </div>
-                    <Input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="パスワード"
-                      className="terminal-input bg-secondary border-muted"
-                      autoComplete="current-password"
-                      disabled={loading}
-                    />
-                  </div>
                 </div>
               </div>
+
+              <p className="text-sm text-muted-foreground">
+                登録時のメールアドレスを入力してください。パスワードリセット用のリンクを送信します。
+              </p>
             </CardContent>
 
             <CardFooter className="flex flex-col gap-4 pt-2">
@@ -147,21 +129,15 @@ export default function LoginPage() {
                 className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
                 disabled={loading}
               >
-                {loading ? "認証中..." : "ログイン"}
+                {loading ? "送信中..." : "リセットメールを送信"}
               </Button>
 
-              <div className="flex justify-between w-full text-xs">
+              <div className="flex justify-end w-full text-xs">
                 <Link
-                  href="/reset-password"
+                  href="/login"
                   className="text-muted-foreground hover:text-primary"
                 >
-                  パスワードを忘れた場合
-                </Link>
-                <Link
-                  href="/register"
-                  className="text-muted-foreground hover:text-primary"
-                >
-                  新規登録はこちら
+                  ログインページに戻る
                 </Link>
               </div>
             </CardFooter>
