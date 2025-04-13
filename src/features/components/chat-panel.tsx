@@ -134,7 +134,6 @@ export function ChatPanel({
                         mode="single"
                         selected={scheduleDate}
                         onSelect={setScheduleDate}
-                        initialFocus
                         className="bg-card text-foreground"
                       />
                     </PopoverContent>
