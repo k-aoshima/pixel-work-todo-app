@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useToast } from "@/shared/hooks/use-toast";
-import { createClient } from "@/utils/supabase/client";
+import { createClient } from "@/app/utils/supabase/client"; // Corrected path alias
 
 export function useAuth() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);

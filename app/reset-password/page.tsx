@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useToast } from "@/shared/hooks/use-toast";
-import { createClient } from "@/utils/supabase/client";
+import { createClient } from "@/app/utils/supabase/client"; // Corrected path
 import { AuthLayout } from "@/features/components/auth-layout";
 import { TerminalForm } from "@/features/components/terminal-form";
 
