@@ -6,6 +6,7 @@ import { AppHeader } from "@/features/components/app-header";
 import { AdminPanel } from "@/features/components/admin-panel";
 import { ChatPanel } from "@/features/components/chat-panel";
 import { CharacterDisplay } from "@/features/components/character-display";
+import { createClient } from "@/app/utils/supabase/client"; // Supabaseクライアントをインポート
 import { useAuth } from "@/shared/hooks/use-auth";
 import { useCharacter } from "@/shared/hooks/use-character";
 import { useScheduleAssist } from "@/shared/hooks/use-schedule-assist";
@@ -15,12 +16,22 @@ import {
   generateCharacterResponse,
 } from "@/shared/lib/ai-utils";
 import type {
-  Task,
+  // Task, // @/shared/types からの Task インポートを削除
   Schedule,
   Message,
 } from "@/shared/types";
+import type { Database } from "@/app/types/database.types"; // 生成された型をインポート
+
+// Task型をDatabaseから取得 (テーブル名は 'Task')
+type Task = Database["public"]["Tables"]["Task"]["Row"];
+// TaskのInsert型も定義
+type TaskInsert = Database["public"]["Tables"]["Task"]["Insert"];
+// TaskのUpdate型も定義
+type TaskUpdate = Database["public"]["Tables"]["Task"]["Update"];
+
 
 export default function Home() {
+  const supabase = createClient(); // Supabaseクライアントを初期化
   const {
     character,
     setCharacter,
@@ -45,11 +56,11 @@ export default function Home() {
     },
   ]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [schedules, setSchedules] = useState<Schedule[]>([]); // Scheduleも同様にDB連携が必要になる可能性がある
   const [setupComplete, setSetupComplete] = useState(false);
   const [setupStep, setSetupStep] = useState(0);
   const [setupAnswers, setSetupAnswers] = useState<string[]>([]);
-  const { isLoggedIn, username, handleLogout } = useAuth();
+  const { isLoggedIn, username, handleLogout, user } = useAuth(); // userオブジェクトを取得
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const [showCommandList, setShowCommandList] = useState(false);
@@ -345,16 +356,22 @@ export default function Home() {
 
       case "#done":
         if (parts.length > 1) {
-          const taskName = parts.slice(1).join(" ");
-          completeTask(taskName);
-          respondToCommand(`タスク「${taskName}」を完了しました！素晴らしい！`);
+          const taskIdentifier = parts.slice(1).join(" ");
+          // IDで検索するか、タイトルで検索するかを決める (ここではタイトルで検索)
+          const taskToComplete = tasks.find(t => t.task?.toLowerCase() === taskIdentifier.toLowerCase() && !t.is_completed); // is_completed に変更
+          if (taskToComplete) {
+            completeTask(taskToComplete.id); // IDを渡すように変更
+            respondToCommand(`タスク「${taskToComplete.task}」を完了しました！素晴らしい！`);
+          } else {
+            respondToCommand(`未完了のタスク「${taskIdentifier}」が見つかりませんでした。`);
+          }
         }
         break;
 
       case "#status":
         const todayTasks = tasks
-          .filter((t) => !t.completed)
-          .map((t) => t.title)
+          .filter((t) => !t.is_completed) // is_completed に変更
+          .map((t) => t.task) // taskカラムを使用
           .join("\n- ");
         const todaySchedules = schedules
           .filter(
@@ -385,26 +402,67 @@ export default function Home() {
     }
   };
 
-  // タスク追加
-  const addTask = (title: string) => {
-    const newTask: Task = {
-      id: Date.now().toString(),
-      title,
-      completed: false,
-      createdAt: new Date(),
+  // タスク追加 (asyncに変更)
+  const addTask = async (title: string) => {
+    if (!user) {
+      console.error("addTask failed: User object is null."); // ユーザーがnullの場合のエラーログ
+      respondToCommand(`タスク「${title}」の追加に失敗しました。ログイン状態を確認してください。`);
+      return;
+    }
+
+    console.log("--- addTask called ---"); // 関数が呼ばれたことを確認
+    console.log("User object:", user); // user オブジェクト全体を出力
+    console.log("User ID:", user?.id); // user.id を安全に出力
+
+    const newTaskData: TaskInsert = {
+      task: title,
+      user_id: user.id, // user_idを追加
+      // isCompleted はデフォルトで false のはずなので省略可
+      // created_at はデフォルトで now() のはずなので省略可
     };
-    setTasks((prev) => [...prev, newTask]);
+
+    const { data, error } = await supabase
+      .from("Task") // テーブル名を 'Task' に変更
+      .insert(newTaskData)
+      .select() // 挿入したデータを返すようにする
+      .single(); // 1件だけ挿入するのでsingle()
+
+    if (error) {
+      console.error("Error adding task:", error.message);
+      respondToCommand(`タスク「${title}」の追加中にエラーが発生しました。`);
+    } else if (data) {
+      // 状態を更新
+      setTasks((prev) => [data, ...prev]); // 新しいタスクをリストの先頭に追加
+      // respondToCommand は processCommand 内で行うのでここでは不要
+    }
   };
 
-  // タスク完了
-  const completeTask = (title: string) => {
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.title.toLowerCase() === title.toLowerCase()
-          ? { ...task, completed: true }
-          : task
-      )
-    );
+  // タスク完了 (asyncに変更, 引数をidに変更)
+  const completeTask = async (id: number) => {
+    const taskToUpdate = tasks.find(t => t.id === id);
+    if (!taskToUpdate || taskToUpdate.is_completed) return; // is_completed に変更
+
+    const updates: TaskUpdate = {
+      is_completed: true, // is_completed に変更
+    };
+
+    const { error } = await supabase
+      .from("Task") // テーブル名を 'Task' に変更
+      .update(updates)
+      .eq("id", id); // idでタスクを指定
+
+    if (error) {
+      console.error("Error completing task:", error.message);
+      respondToCommand(`タスクの完了処理中にエラーが発生しました。`);
+    } else {
+      // 状態を更新
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === id ? { ...task, is_completed: true } : task // is_completed に変更
+        )
+      );
+      // respondToCommand は processCommand 内で行うのでここでは不要
+    }
   };
 
   // コマンドへの応答
@@ -447,6 +505,41 @@ export default function Home() {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
+
+  // DBからタスクを取得するuseEffect
+  useEffect(() => {
+    const fetchTasks = async () => {
+      if (!user) return;
+
+      const { data: fetchedTasks, error } = await supabase // 変数名を変更
+        .from("Task") // テーブル名を 'Task' に変更
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      console.log("--- fetchTasks Response ---"); // ログ追加
+      console.log("Fetched Tasks Data:", fetchedTasks); // 取得データログ
+      console.log("Fetch Tasks Error:", error); // エラーログ
+
+      if (error) {
+        console.error("Error fetching tasks:", error.message);
+        // エラーが発生した場合でも空の配列をセットする (UIのクラッシュを防ぐため)
+        setTasks([]);
+      } else if (fetchedTasks) {
+        // is_completed カラムを使用するように修正 (型定義と一致)
+        setTasks(fetchedTasks);
+        console.log(`Fetched ${fetchedTasks.length} tasks.`); // 取得件数ログ
+      } else {
+        // fetchedTasks が null や undefined の場合 (通常は起こらないはずだが念のため)
+        console.warn("fetchTasks returned null or undefined data, setting tasks to empty array.");
+        setTasks([]);
+      }
+    };
+
+    if (isLoggedIn && user) {
+      fetchTasks();
+    }
+  }, [isLoggedIn, user, supabase]); // 依存配列にsupabaseを追加
 
   // 初期メッセージ用のuseEffect
   useEffect(() => {
@@ -498,9 +591,9 @@ export default function Home() {
 
       <div className="flex flex-1 overflow-hidden">
         <AdminPanel
-          tasks={tasks}
+          tasks={tasks} // tasks をそのまま渡す (AdminPanel側でis_completedとtaskを使うように修正が必要)
           schedules={schedules}
-          completeTask={completeTask}
+          completeTask={completeTask} // completeTaskの引数がidになったことをAdminPanelに伝える必要あり
           insertCommand={insertCommand}
           sidebarOpen={sidebarOpen}
           setSidebarOpen={setSidebarOpen}

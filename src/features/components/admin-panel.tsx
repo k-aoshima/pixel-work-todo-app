@@ -17,12 +17,17 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/features/ui/collapsible";
-import type { Task, Schedule } from "@/shared/types";
+// import type { Task, Schedule } from "@/shared/types"; // 削除
+import type { Database } from "@/app/types/database.types"; // 追加
+import type { Schedule } from "@/shared/types"; // Scheduleはそのまま
+
+// Task型をDatabaseから取得
+type Task = Database["public"]["Tables"]["Task"]["Row"];
 
 interface AdminPanelProps {
   tasks: Task[];
   schedules: Schedule[];
-  completeTask: (title: string) => void;
+  completeTask: (id: number) => void; // 引数をid: numberに変更
   insertCommand: (command: string) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
@@ -128,23 +133,23 @@ export function AdminPanel({
               ) : (
                 <ul className="space-y-1">
                   {tasks
-                    .filter((task) => !task.completed)
+                    .filter((task) => !task.is_completed) // is_completed に変更
                     .map((task) => (
                       <li
                         key={task.id}
                         className="task-item flex items-center gap-2 p-2 rounded-md"
                       >
                         <Checkbox
-                          id={task.id}
-                          checked={task.completed}
-                          onCheckedChange={() => completeTask(task.title)}
+                          id={`task-${task.id}`} // idを文字列に変更
+                          checked={task.is_completed} // is_completed に変更
+                          onCheckedChange={() => completeTask(task.id)} // 引数を task.id に変更
                           className="border-muted-foreground data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                         />
                         <label
-                          htmlFor={task.id}
+                          htmlFor={`task-${task.id}`} // htmlForを文字列に変更
                           className="text-xs flex-1 cursor-pointer"
                         >
-                          {task.title}
+                          {task.task} {/* task に変更 */}
                         </label>
                       </li>
                     ))}
