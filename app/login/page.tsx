@@ -31,7 +31,7 @@ export default function LoginPage() {
     }
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email: username,
         password: password,
       });
@@ -40,7 +40,6 @@ export default function LoginPage() {
         console.error("ログインエラー:", error);
         setError(error.message);
       } else {
-        console.log("ログイン成功:", data);
         toast({
           title: "ログイン成功",
           description: "PixelWorkへようこそ！",
