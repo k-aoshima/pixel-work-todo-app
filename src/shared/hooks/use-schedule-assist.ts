@@ -1,6 +1,8 @@
 import { useState } from "react";
-import type { Schedule } from "@/shared/types";
+import type { Database } from "@/app/types/database.types";
 import { format } from "date-fns";
+
+type Schedule = Database["public"]["Tables"]["Schedule"]["Row"];
 import { useToast } from "./use-toast";
 
 export function useScheduleAssist({
@@ -59,11 +61,11 @@ export function useScheduleAssist({
     }
 
     return {
-      id: Date.now().toString(),
-      title,
-      date: new Date(formattedDate),
-      time,
-      createdAt: new Date(),
+      id: Date.now(),
+      schedule_name: title,
+      schedule_date_time: `${formattedDate} ${time}`,
+      user_id: null, // ユーザーIDはここでは不明
+      created_at: new Date().toISOString(),
     } as Schedule;
   };
 

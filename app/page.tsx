@@ -44,8 +44,8 @@ type ScheduleInsert = Database["public"]["Tables"]["Schedule"]["Insert"];
 type CharacterProfile = Database["public"]["Tables"]["CharacterProfile"]["Row"];
 type CharacterProfileInsert =
   Database["public"]["Tables"]["CharacterProfile"]["Insert"];
-type CharacterProfileUpdate =
-  Database["public"]["Tables"]["CharacterProfile"]["Update"];
+// type CharacterProfileUpdate =
+//   Database["public"]["Tables"]["CharacterProfile"]["Update"];
 
 export default function Home() {
   const supabase = createClient(); // Supabaseクライアントを初期化
@@ -64,7 +64,9 @@ export default function Home() {
   } = useCharacter(); // 元の setCharacter は内部でのみ使用
 
   // ★ キャラクター変更とDB更新を行う新しいハンドラー関数
-  const handleCharacterChange = async (newCharacter: ReturnType<typeof useCharacter>['character']) => {
+  const handleCharacterChange = async (
+    newCharacter: ReturnType<typeof useCharacter>["character"]
+  ) => {
     // 1. ローカルステートを即時更新 (UI反映のため)
     setCharacter(newCharacter);
 
@@ -76,7 +78,9 @@ export default function Home() {
     }
 
     // ★ characterProfile が null でも更新処理を実行
-    console.log(`Attempting to update character type to '${newCharacter}' in DB for user ID: ${user.id}`);
+    console.log(
+      `Attempting to update character type to '${newCharacter}' in DB for user ID: ${user.id}`
+    );
 
     // ★ 更新対象を characterProfile.id ではなく user.id で指定する
     const { error } = await supabase
@@ -97,7 +101,9 @@ export default function Home() {
           return { ...prevProfile, character_type: newCharacter };
         }
         // prevProfile が null の場合は稀だが、念のため null を返す
-        console.warn("Updated character type in DB, but local profile state was null.");
+        console.warn(
+          "Updated character type in DB, but local profile state was null."
+        );
         return null;
       });
     }
@@ -120,7 +126,8 @@ export default function Home() {
   const [setupStep, setSetupStep] = useState(0);
   const [setupAnswers, setSetupAnswers] = useState<string[]>([]);
   const { isLoggedIn, username, handleLogout, user } = useAuth(); // userオブジェクトを取得
-  const [characterProfile, setCharacterProfile] = useState<CharacterProfile | null>(null); // DBからのプロファイルデータ
+  const [characterProfile, setCharacterProfile] =
+    useState<CharacterProfile | null>(null); // DBからのプロファイルデータ
   const [isProfileLoading, setIsProfileLoading] = useState(true); // ★ プロファイル読み込み状態
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -221,7 +228,9 @@ export default function Home() {
       const saveCharacterProfile = async () => {
         if (!user) {
           console.error("Cannot save profile: user is null.");
-          respondToCommand("キャラクター設定の保存に失敗しました。ログイン状態を確認してください。");
+          respondToCommand(
+            "キャラクター設定の保存に失敗しました。ログイン状態を確認してください。"
+          );
           return;
         }
 
@@ -234,14 +243,25 @@ export default function Home() {
           .maybeSingle(); // 存在しない場合は null が返る
 
         if (checkError) {
-          console.error("Error checking existing character profile:", checkError.message);
-          respondToCommand(`キャラクター設定の確認中にエラーが発生しました: ${checkError.message}`);
+          console.error(
+            "Error checking existing character profile:",
+            checkError.message
+          );
+          respondToCommand(
+            `キャラクター設定の確認中にエラーが発生しました: ${checkError.message}`
+          );
           return;
         }
 
         if (existingProfile) {
-          console.warn(`Character type '${newCharacter}' already exists for this user.`);
-          respondToCommand(`既に「${newCharacter === 'cat' ? '猫' : '犬'}」のキャラクターが存在します。別のキャラクターを選択するか、設定を続けてください。`);
+          console.warn(
+            `Character type '${newCharacter}' already exists for this user.`
+          );
+          respondToCommand(
+            `既に「${
+              newCharacter === "cat" ? "猫" : "犬"
+            }」のキャラクターが存在します。別のキャラクターを選択するか、設定を続けてください。`
+          );
           // ★ 重複時は設定完了とせず、ユーザーに再選択を促すため needsSetup は true のままにする
           // ★ setupStep を戻すなど、UI/UXに応じた調整が必要な場合がある
           // ★ 今回はメッセージ表示のみ
@@ -265,7 +285,9 @@ export default function Home() {
 
         if (insertError) {
           console.error("Error saving character profile:", insertError.message);
-          respondToCommand(`キャラクター設定の保存中にエラーが発生しました: ${insertError.message}`);
+          respondToCommand(
+            `キャラクター設定の保存中にエラーが発生しました: ${insertError.message}`
+          );
         } else if (insertedData) {
           console.log("Character profile saved successfully:", insertedData);
           setCharacterProfile(insertedData); // 保存したデータを状態に反映
@@ -766,7 +788,9 @@ export default function Home() {
       try {
         // ★ user が null の可能性は Main useEffect で排除されているはずだが念のためチェック
         if (!user) {
-          console.warn("fetchCharacterProfile called unexpectedly with null user.");
+          console.warn(
+            "fetchCharacterProfile called unexpectedly with null user."
+          );
           setNeedsSetup(true);
           return; // 処理中断
         }
@@ -781,14 +805,21 @@ export default function Home() {
         console.log("Profile Data:", profile);
         console.log("Profile Error:", error);
 
-        if (error && error.code !== 'PGRST116') { // PGRST116: No rows found
+        if (error && error.code !== "PGRST116") {
+          // PGRST116: No rows found
           console.error("Error fetching character profile:", error.message);
           setNeedsSetup(true);
         } else if (profile) {
           console.log("Character profile found:", profile);
-          setCharacter(profile.character_type as ReturnType<typeof useCharacter>['character'] || 'cat');
-          setCharacterPersonality(profile.character_personality as string || 'friendly');
-          setCharacterAttitude('friendly');
+          setCharacter(
+            (profile.character_type as ReturnType<
+              typeof useCharacter
+            >["character"]) || "cat"
+          );
+          setCharacterPersonality(
+            (profile.character_personality as string) || "friendly"
+          );
+          setCharacterAttitude("friendly");
           setCharacterProfile(profile);
           setNeedsSetup(false);
         } else {
@@ -796,8 +827,12 @@ export default function Home() {
           setNeedsSetup(true);
           // ★★★ ここでの質問追加ロジックは削除 ★★★
         }
-      } catch (fetchError) { // 予期せぬエラーをキャッチ
-        console.error("Unexpected error fetching character profile:", fetchError);
+      } catch (fetchError) {
+        // 予期せぬエラーをキャッチ
+        console.error(
+          "Unexpected error fetching character profile:",
+          fetchError
+        );
         setNeedsSetup(true); // エラー時は初期設定が必要と判断
         // ★★★ ここでの質問追加ロジックは削除 ★★★
       } finally {
@@ -822,7 +857,18 @@ export default function Home() {
     }
     // ★ 依存配列を修正: supabase は通常変更されないため削除、必要なセッターのみ残す
     // ★ setCharacterProfile, setIsProfileLoading を依存配列に追加
-  }, [isLoggedIn, user, setCharacter, setCharacterPersonality, setCharacterAttitude, setNeedsSetup, setupQuestions, setCharacterProfile, setIsProfileLoading]);
+  }, [
+    isLoggedIn,
+    user,
+    setCharacter,
+    setCharacterPersonality,
+    setCharacterAttitude,
+    setNeedsSetup,
+    setupQuestions,
+    setCharacterProfile,
+    setIsProfileLoading,
+    supabase,
+  ]);
 
   // ★ 初期設定の質問を表示するための useEffect (再導入)
   useEffect(() => {
@@ -830,11 +876,19 @@ export default function Home() {
     // 初期設定が必要(needsSetup)で、ログイン済み(user)で、
     // プロファイルが実際に存在せず(characterProfile === null)、
     // かつ最初の挨拶メッセージのみ表示されている(messages.length === 1)場合
-    if (!isProfileLoading && needsSetup && user && characterProfile === null && messages.length === 1) {
-      console.log(">>> useEffect [Setup Question]: Conditions met, adding setup question.");
+    if (
+      !isProfileLoading &&
+      needsSetup &&
+      user &&
+      characterProfile === null &&
+      messages.length === 1
+    ) {
+      console.log(
+        ">>> useEffect [Setup Question]: Conditions met, adding setup question."
+      );
       setMessages((prevMessages) => {
         // 念のため、重複追加を防ぐ
-        if (!prevMessages.some(msg => msg.id === 'setup-q1')) {
+        if (!prevMessages.some((msg) => msg.id === "setup-q1")) {
           return [
             ...prevMessages,
             {
@@ -848,12 +902,19 @@ export default function Home() {
         return prevMessages;
       });
     }
-  // 依存配列には、条件判定に使用する state を含める
-  // user と characterProfile はオブジェクトなので、その存在有無を示す boolean や ID を使う方が安定する場合があるが、
-  // ここでは読み込み完了後の状態変化をトリガーとするため、isProfileLoading と needsSetup を主軸にする
-  }, [isProfileLoading, needsSetup, user, characterProfile, messages, setupQuestions]); // messages も依存配列に含め、メッセージ追加後の再評価を防ぐためのチェックを内部で行う
+    // 依存配列には、条件判定に使用する state を含める
+    // user と characterProfile はオブジェクトなので、その存在有無を示す boolean や ID を使う方が安定する場合があるが、
+    // ここでは読み込み完了後の状態変化をトリガーとするため、isProfileLoading と needsSetup を主軸にする
+  }, [
+    isProfileLoading,
+    needsSetup,
+    user,
+    characterProfile,
+    messages,
+    setupQuestions,
+  ]); // messages も依存配列に含め、メッセージ追加後の再評価を防ぐためのチェックを内部で行う
 
- // ログインしていない場合はローディング表示
+  // ログインしていない場合はローディング表示
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
