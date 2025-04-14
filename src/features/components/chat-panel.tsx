@@ -34,7 +34,7 @@ interface ChatPanelProps {
   selectedCommandIndex: number;
   insertCommand: (command: string) => void;
   inputRef: RefObject<HTMLInputElement | null>;
-  setupComplete: boolean;
+  needsSetup: boolean; // ★ setupComplete から変更
   showScheduleAssist: boolean;
   scheduleDate: Date | undefined;
   scheduleTime: string;
@@ -59,7 +59,7 @@ export function ChatPanel({
   selectedCommandIndex,
   insertCommand,
   inputRef,
-  setupComplete,
+  needsSetup, // ★ setupComplete から変更
   showScheduleAssist,
   scheduleDate,
   scheduleTime,
@@ -193,7 +193,7 @@ export function ChatPanel({
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
                   placeholder={
-                    setupComplete ? "メッセージを入力..." : "回答を入力..."
+                    !needsSetup ? "回答を入力..." : "メッセージを入力..." // ★ setupComplete から変更し、条件を反転
                   }
                   className="border border-muted bg-background/50 focus-visible:ring-1 focus-visible:ring-primary h-10 text-sm rounded-full pl-4 pr-10"
                 />

@@ -8,7 +8,8 @@ import type { CharacterType } from "@/shared/types";
 interface AppHeaderProps {
   username: string;
   character: CharacterType;
-  setCharacter: (character: CharacterType) => void;
+  // ★ setCharacter の型を非同期関数を受け取れるように変更
+  setCharacter: (character: CharacterType) => Promise<void>;
   handleLogout: () => void;
 }
 
