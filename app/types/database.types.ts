@@ -9,6 +9,54 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      CharacterProfile: {
+        Row: {
+          character_personality: Json | null;
+          character_type: string | null;
+          created_at: string;
+          id: number;
+          user_id: string | null;
+        };
+        Insert: {
+          character_personality?: Json | null;
+          character_type?: string | null;
+          created_at?: string;
+          id?: number;
+          user_id?: string | null;
+        };
+        Update: {
+          character_personality?: Json | null;
+          character_type?: string | null;
+          created_at?: string;
+          id?: number;
+          user_id?: string | null;
+        };
+        Relationships: [];
+      };
+      Schedule: {
+        Row: {
+          created_at: string;
+          id: number;
+          schedule_date_time: string | null;
+          schedule_name: string | null;
+          user_id: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          id?: number;
+          schedule_date_time?: string | null;
+          schedule_name?: string | null;
+          user_id?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          id?: number;
+          schedule_date_time?: string | null;
+          schedule_name?: string | null;
+          user_id?: string | null;
+        };
+        Relationships: [];
+      };
       Task: {
         Row: {
           created_at: string;
