@@ -1,11 +1,18 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, type KeyboardEvent } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  type KeyboardEvent,
+} from "react";
 import { Code, Plus, Calendar, Terminal, CheckSquare } from "lucide-react";
 import { AppHeader } from "@/features/components/app-header";
 import { AdminPanel } from "@/features/components/admin-panel";
 import { ChatPanel } from "@/features/components/chat-panel";
 import { CharacterDisplay } from "@/features/components/character-display";
+import { createClient } from "@/app/utils/supabase/client"; // Supabaseクライアントをインポート
 import { useAuth } from "@/shared/hooks/use-auth";
 import { useCharacter } from "@/shared/hooks/use-character";
 import { useScheduleAssist } from "@/shared/hooks/use-schedule-assist";
@@ -15,12 +22,33 @@ import {
   generateCharacterResponse,
 } from "@/shared/lib/ai-utils";
 import type {
-  Task,
-  Schedule,
+  // Task, // @/shared/types からの Task インポートを削除
+  // Schedule, // @/shared/types からの Schedule インポートを削除
   Message,
 } from "@/shared/types";
+import type { Database } from "@/app/types/database.types"; // 生成された型をインポート
+
+// Task型をDatabaseから取得 (テーブル名は 'Task')
+type Task = Database["public"]["Tables"]["Task"]["Row"];
+// TaskのInsert型も定義
+type TaskInsert = Database["public"]["Tables"]["Task"]["Insert"];
+// TaskのUpdate型も定義
+type TaskUpdate = Database["public"]["Tables"]["Task"]["Update"];
+
+// Schedule型をDatabaseから取得 (テーブル名は 'Schedule')
+type Schedule = Database["public"]["Tables"]["Schedule"]["Row"];
+// ScheduleのInsert型も定義
+type ScheduleInsert = Database["public"]["Tables"]["Schedule"]["Insert"];
+
+// ★ CharacterProfile の型定義をインポート (database.types.ts から取得)
+type CharacterProfile = Database["public"]["Tables"]["CharacterProfile"]["Row"];
+type CharacterProfileInsert =
+  Database["public"]["Tables"]["CharacterProfile"]["Insert"];
+// type CharacterProfileUpdate =
+//   Database["public"]["Tables"]["CharacterProfile"]["Update"];
 
 export default function Home() {
+  const supabase = createClient(); // Supabaseクライアントを初期化
   const {
     character,
     setCharacter,
@@ -33,7 +61,54 @@ export default function Home() {
     updateMood,
     getStyledResponse,
     getAttitudeText,
-  } = useCharacter();
+  } = useCharacter(); // 元の setCharacter は内部でのみ使用
+
+  // ★ キャラクター変更とDB更新を行う新しいハンドラー関数
+  const handleCharacterChange = async (
+    newCharacter: ReturnType<typeof useCharacter>["character"]
+  ) => {
+    // 1. ローカルステートを即時更新 (UI反映のため)
+    setCharacter(newCharacter);
+
+    // 2. DB更新処理 (ユーザーが存在することのみを確認)
+    if (!user) {
+      console.warn("Cannot update character type in DB: User not available.");
+      // 必要であればユーザーにエラー通知
+      return;
+    }
+
+    // ★ characterProfile が null でも更新処理を実行
+    console.log(
+      `Attempting to update character type to '${newCharacter}' in DB for user ID: ${user.id}`
+    );
+
+    // ★ 更新対象を characterProfile.id ではなく user.id で指定する
+    const { error } = await supabase
+      .from("CharacterProfile")
+      .update({ character_type: newCharacter })
+      .eq("user_id", user.id); // ★ user_id で更新対象を指定
+
+    if (error) {
+      console.error("Error updating character type in DB:", error.message);
+      // 必要であればユーザーにエラー通知 (例: Toast)
+      // 元のキャラクタータイプに戻すことも検討？ (今回は行わない)
+    } else {
+      console.log("Character type updated successfully in DB.");
+      // ★ DB更新成功後、ローカルの characterProfile state も更新する
+      setCharacterProfile((prevProfile) => {
+        if (prevProfile) {
+          // 既存のプロファイル情報に新しいキャラクタータイプをマージ
+          return { ...prevProfile, character_type: newCharacter };
+        }
+        // prevProfile が null の場合は稀だが、念のため null を返す
+        console.warn(
+          "Updated character type in DB, but local profile state was null."
+        );
+        return null;
+      });
+    }
+  };
+
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -45,11 +120,15 @@ export default function Home() {
     },
   ]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [schedules, setSchedules] = useState<Schedule[]>([]);
-  const [setupComplete, setSetupComplete] = useState(false);
+  const [schedules, setSchedules] = useState<Schedule[]>([]); // 型をDBから取得したものに変更
+  // const [setupComplete, setSetupComplete] = useState(false); // needsSetup に置き換え
+  const [needsSetup, setNeedsSetup] = useState(true); // 初期設定が必要かどうかの状態
   const [setupStep, setSetupStep] = useState(0);
   const [setupAnswers, setSetupAnswers] = useState<string[]>([]);
-  const { isLoggedIn, username, handleLogout } = useAuth();
+  const { isLoggedIn, username, handleLogout, user } = useAuth(); // userオブジェクトを取得
+  const [characterProfile, setCharacterProfile] =
+    useState<CharacterProfile | null>(null); // DBからのプロファイルデータ
+  const [isProfileLoading, setIsProfileLoading] = useState(true); // ★ プロファイル読み込み状態
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const [showCommandList, setShowCommandList] = useState(false);
@@ -97,15 +176,18 @@ export default function Home() {
   >([]);
 
   // 初期設定の質問
-  const setupQuestions = useMemo(() => [
-    "朝は得意？それとも夜が好き？",
-    "どんなタイプの仕事が好き？",
-    "最近、楽しいと感じたのはどんな時？",
-    "猫と犬、どちらが好き？",
-  ], []);
+  const setupQuestions = useMemo(
+    () => [
+      "朝は得意？それとも夜が好き？",
+      "どんなタイプの仕事が好き？",
+      "最近、楽しいと感じたのはどんな時？",
+      "猫と犬、どちらが好き？",
+    ],
+    []
+  );
 
-  // 初期設定の回答を処理
-  const handleSetupAnswer = (answer: string) => {
+  // 初期設定の回答を処理 (async に変更)
+  const handleSetupAnswer = async (answer: string) => {
     const newAnswers = [...setupAnswers, answer];
     setSetupAnswers(newAnswers);
 
@@ -141,32 +223,85 @@ export default function Home() {
 
       setCharacterPersonality(personality);
       setCharacterAttitude("friendly"); // 初期態度を設定
-      setSetupComplete(true);
 
-      // 設定完了メッセージ
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          content: answer,
-          sender: "user",
-          timestamp: new Date(),
-        },
-        {
-          id: (Date.now() + 1).toString(),
-          content: `設定完了！${
-            newCharacter === "cat" ? "猫" : "犬"
-          }のキャラクターで、${
-            personality === "energetic"
-              ? "元気"
-              : personality === "calm"
-              ? "落ち着いた"
-              : "フレンドリーな"
-          }性格になりました。\n\nコマンドの使い方:\n#task タスク名 - タスクを追加\n#schedule 日付 時間 予定名 - スケジュールを追加\n#done タスク名 - タスクを完了\n#status - 今日のタスクと予定を表示\n#mood 気分 - 気分を共有`,
-          sender: "character",
-          timestamp: new Date(),
-        },
-      ]);
+      // ★ DBにキャラクター設定を保存する処理を追加 (重複チェック付き)
+      const saveCharacterProfile = async () => {
+        if (!user) {
+          console.error("Cannot save profile: user is null.");
+          respondToCommand(
+            "キャラクター設定の保存に失敗しました。ログイン状態を確認してください。"
+          );
+          return;
+        }
+
+        // 1. 重複チェック: 同じユーザーIDとキャラクター種別が既に存在するか確認
+        const { data: existingProfile, error: checkError } = await supabase
+          .from("CharacterProfile")
+          .select("id")
+          .eq("user_id", user.id)
+          .eq("character_type", newCharacter)
+          .maybeSingle(); // 存在しない場合は null が返る
+
+        if (checkError) {
+          console.error(
+            "Error checking existing character profile:",
+            checkError.message
+          );
+          respondToCommand(
+            `キャラクター設定の確認中にエラーが発生しました: ${checkError.message}`
+          );
+          return;
+        }
+
+        if (existingProfile) {
+          console.warn(
+            `Character type '${newCharacter}' already exists for this user.`
+          );
+          respondToCommand(
+            `既に「${
+              newCharacter === "cat" ? "猫" : "犬"
+            }」のキャラクターが存在します。別のキャラクターを選択するか、設定を続けてください。`
+          );
+          // ★ 重複時は設定完了とせず、ユーザーに再選択を促すため needsSetup は true のままにする
+          // ★ setupStep を戻すなど、UI/UXに応じた調整が必要な場合がある
+          // ★ 今回はメッセージ表示のみ
+          return; // 保存処理を中断
+        }
+
+        // 2. 重複がない場合のみ挿入処理を実行
+        const profileData: CharacterProfileInsert = {
+          user_id: user.id,
+          character_type: newCharacter,
+          character_personality: personality, // 性格をJSONとして保存する場合、適切な形式に変換が必要
+        };
+
+        console.log("Attempting to save character profile:", profileData);
+
+        const { data: insertedData, error: insertError } = await supabase
+          .from("CharacterProfile")
+          .insert(profileData)
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error("Error saving character profile:", insertError.message);
+          respondToCommand(
+            `キャラクター設定の保存中にエラーが発生しました: ${insertError.message}`
+          );
+        } else if (insertedData) {
+          console.log("Character profile saved successfully:", insertedData);
+          setCharacterProfile(insertedData); // 保存したデータを状態に反映
+          setNeedsSetup(false); // ★ 保存成功後に設定完了とする
+          // 設定完了メッセージは saveCharacterProfile の呼び出し元で表示される
+        }
+      };
+
+      // 保存処理を実行し、成功した場合のみ設定完了メッセージを表示
+      await saveCharacterProfile(); // await を追加して完了を待つ
+
+      // ★ needsSetup が false になった場合（＝保存成功時）のみ完了メッセージを表示
+      // この条件分岐は await saveCharacterProfile(); の後に移動済みなので、
+      // ここにあった重複ブロックを削除
     }
   };
 
@@ -226,8 +361,8 @@ export default function Home() {
 
     if (!messageToSend.trim()) return;
 
-    // 初期設定中は回答として処理
-    if (!setupComplete) {
+    // ★ 初期設定が必要な場合は回答として処理 (needsSetup を使用)
+    if (needsSetup) {
       handleSetupAnswer(messageToSend);
       setMessage("");
       return;
@@ -248,7 +383,8 @@ export default function Home() {
       processCommand(messageToSend);
     } else {
       // 通常のメッセージ - AIで分析して返答
-      setTimeout(() => {
+      // ★ setTimeout を削除し、async/await を使うように変更
+      const processNormalMessage = async () => {
         // メッセージを分析
         const analysis = analyzeMessage(messageToSend);
 
@@ -307,11 +443,21 @@ export default function Home() {
             timestamp: new Date(),
           },
         ]);
-      }, 500);
+      };
+      processNormalMessage(); // 非同期関数を実行
     }
 
+    // メッセージ入力欄をクリア (カスタムメッセージでない場合)
     if (!customMessage) {
       setMessage("");
+    }
+    // コマンドリストを非表示にする処理を追加
+    if (showCommandList) {
+      setShowCommandList(false);
+    }
+    // スケジュールアシストを非表示にする処理を追加 (ただし #schedule コマンド直後を除く)
+    if (showScheduleAssist && !messageToSend.startsWith("#schedule")) {
+      setShowScheduleAssist(false);
     }
   };
 
@@ -325,42 +471,57 @@ export default function Home() {
         if (parts.length > 1) {
           const taskName = parts.slice(1).join(" ");
           addTask(taskName);
-          respondToCommand(
-            `タスク「${taskName}」を追加しました！頑張ってください！`
-          );
+          // respondToCommand は addTask 内で成功時に行うように変更
         }
         break;
 
       case "#schedule":
         if (parts.length > 3) {
-          const date = parts[1];
-          const time = parts[2];
+          const dateStr = parts[1]; // 日付文字列 (YYYY-MM-DD)
+          const timeStr = parts[2]; // 時間文字列 (HH:MM or HH:MM:SS)
           const title = parts.slice(3).join(" ");
-          addSchedule(date, time, title);
-          respondToCommand(
-            `${date} ${time}に「${title}」の予定を追加しました！忘れないようにお知らせしますね！`
-          );
+          addSchedule(dateStr, timeStr, title);
+          // respondToCommand は addSchedule 内で成功時に行うように変更
         }
         break;
 
       case "#done":
         if (parts.length > 1) {
-          const taskName = parts.slice(1).join(" ");
-          completeTask(taskName);
-          respondToCommand(`タスク「${taskName}」を完了しました！素晴らしい！`);
+          const taskIdentifier = parts.slice(1).join(" ");
+          const taskToComplete = tasks.find(
+            (t) =>
+              t.task?.toLowerCase() === taskIdentifier.toLowerCase() &&
+              !t.is_completed
+          );
+          if (taskToComplete) {
+            completeTask(taskToComplete.id);
+            // respondToCommand は completeTask 内で成功時に行うように変更
+          } else {
+            respondToCommand(
+              `未完了のタスク「${taskIdentifier}」が見つかりませんでした。`
+            );
+          }
         }
         break;
 
       case "#status":
         const todayTasks = tasks
-          .filter((t) => !t.completed)
-          .map((t) => t.title)
+          .filter((t) => !t.is_completed)
+          .map((t) => t.task)
           .join("\n- ");
+
+        // DBから取得したスケジュールデータを使うように変更
+        const today = new Date().toISOString().split("T")[0]; // 今日の日付を YYYY-MM-DD 形式で取得
         const todaySchedules = schedules
-          .filter(
-            (s) => new Date(s.date).toDateString() === new Date().toDateString()
-          )
-          .map((s) => `${s.time} ${s.title}`)
+          // schedule_date_time (文字列) から日付部分を抽出して比較
+          .filter((s) => s.schedule_date_time?.startsWith(today))
+          .map((s) => {
+            // schedule_date_time から時間部分を抽出 (HH:MM:SS or HH:MM)
+            const timePart = s.schedule_date_time?.split(" ")[1] || "";
+            // 秒を省略する場合
+            const displayTime = timePart.split(":").slice(0, 2).join(":");
+            return `${displayTime} ${s.schedule_name}`; // カラム名を使用
+          })
           .join("\n- ");
 
         respondToCommand(
@@ -385,26 +546,64 @@ export default function Home() {
     }
   };
 
-  // タスク追加
-  const addTask = (title: string) => {
-    const newTask: Task = {
-      id: Date.now().toString(),
-      title,
-      completed: false,
-      createdAt: new Date(),
+  // タスク追加 (asyncに変更)
+  const addTask = async (title: string) => {
+    if (!user) {
+      console.error("addTask failed: User object is null.");
+      respondToCommand(
+        `タスク「${title}」の追加に失敗しました。ログイン状態を確認してください。`
+      );
+      return;
+    }
+
+    const newTaskData: TaskInsert = {
+      task: title,
+      user_id: user.id,
     };
-    setTasks((prev) => [...prev, newTask]);
+
+    const { data, error } = await supabase
+      .from("Task")
+      .insert(newTaskData)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error adding task:", error.message);
+      respondToCommand(
+        `タスク「${title}」の追加中にエラーが発生しました: ${error.message}`
+      );
+    } else if (data) {
+      setTasks((prev) => [data, ...prev]);
+      respondToCommand(`タスク「${title}」を追加しました！頑張ってください！`);
+    }
   };
 
-  // タスク完了
-  const completeTask = (title: string) => {
-    setTasks((prev) =>
-      prev.map((task) =>
-        task.title.toLowerCase() === title.toLowerCase()
-          ? { ...task, completed: true }
-          : task
-      )
-    );
+  // タスク完了 (asyncに変更, 引数をidに変更)
+  const completeTask = async (id: number) => {
+    const taskToUpdate = tasks.find((t) => t.id === id);
+    if (!taskToUpdate || taskToUpdate.is_completed) return;
+
+    const updates: TaskUpdate = {
+      is_completed: true,
+    };
+
+    const { error } = await supabase.from("Task").update(updates).eq("id", id);
+
+    if (error) {
+      console.error("Error completing task:", error.message);
+      respondToCommand(
+        `タスク「${taskToUpdate.task}」の完了処理中にエラーが発生しました: ${error.message}`
+      );
+    } else {
+      setTasks((prev) =>
+        prev.map((task) =>
+          task.id === id ? { ...task, is_completed: true } : task
+        )
+      );
+      respondToCommand(
+        `タスク「${taskToUpdate.task}」を完了しました！素晴らしい！`
+      );
+    }
   };
 
   // コマンドへの応答
@@ -432,13 +631,78 @@ export default function Home() {
     setScheduleTitle,
     timeOptions,
     confirmSchedule,
-    addSchedule: createSchedule,
+    // addSchedule: createSchedule, // useScheduleAssist の addSchedule は使わない
   } = useScheduleAssist({ sendMessage });
 
-  // スケジュール追加のラッパー関数
-  const addSchedule = (date: string, time: string, title: string) => {
-    const newSchedule = createSchedule(date, time, title);
-    setSchedules((prev) => [...prev, newSchedule]);
+  // スケジュール追加 (asyncに変更, DB連携)
+  const addSchedule = async (
+    dateStrInput: string,
+    timeStr: string,
+    title: string
+  ) => {
+    // dateStr の引数名変更
+    if (!user) {
+      console.error("addSchedule failed: User object is null.");
+      respondToCommand(
+        `スケジュール「${title}」の追加に失敗しました。ログイン状態を確認してください。`
+      );
+      return;
+    }
+
+    // 日付の区切り文字をハイフンに統一
+    const dateStr = dateStrInput.replace(/\//g, "-");
+
+    // 日付と時刻を結合して schedule_date_time 文字列を作成
+    // YYYY-MM-DD HH:MM:SS 形式を仮定 (DBのカラム型に合わせる)
+    const scheduleDateTime = `${dateStr} ${timeStr}`;
+
+    // バリデーション (ハイフン区切りでチェック)
+    if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(scheduleDateTime)) {
+      respondToCommand(
+        `日付または時間の形式が無効です。「YYYY-MM-DD HH:MM」または「YYYY-MM-DD HH:MM:SS」形式で入力してください。入力値: ${dateStrInput} ${timeStr}`
+      ); // エラー時に元の入力値も表示
+      return;
+    }
+
+    const newScheduleData: ScheduleInsert = {
+      // DBのカラム名に合わせて修正
+      schedule_name: title,
+      schedule_date_time: scheduleDateTime,
+      user_id: user.id,
+    };
+
+    // ★デバッグログ追加: 送信するデータを確認
+    console.log(
+      "Attempting to add schedule with data:",
+      JSON.stringify(newScheduleData, null, 2)
+    );
+
+    const { data, error } = await supabase
+      .from("Schedule")
+      .insert(newScheduleData)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Error adding schedule:", error.message);
+      respondToCommand(
+        `スケジュール「${title}」の追加中にエラーが発生しました: ${error.message}`
+      );
+    } else if (data) {
+      console.log("Schedule added successfully:", data);
+      const addedSchedule = data as Schedule;
+      setSchedules((prev) =>
+        [addedSchedule, ...prev].sort((a, b) => {
+          // ソート順を schedule_date_time で維持
+          const timeA = a.schedule_date_time || "";
+          const timeB = b.schedule_date_time || "";
+          return timeA.localeCompare(timeB);
+        })
+      );
+      respondToCommand(
+        `${dateStr} ${timeStr}に「${title}」の予定を追加しました！忘れないようにお知らせしますね！`
+      );
+    }
   };
 
   // 自動スクロール用のuseEffect
@@ -448,20 +712,207 @@ export default function Home() {
     }
   }, [messages]);
 
-  // 初期メッセージ用のuseEffect
+  // DBからタスクとスケジュールを取得するuseEffect
   useEffect(() => {
-    if (!setupComplete && setupStep === 0 && messages.length === 1) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: "2",
-          content: setupQuestions[0],
-          sender: "character",
-          timestamp: new Date(),
-        },
-      ]);
+    const fetchTasks = async () => {
+      if (!user) {
+        console.log("fetchTasks skipped: user is null");
+        return;
+      }
+      console.log("fetchTasks called for user:", user.id);
+
+      const { data: fetchedTasks, error } = await supabase
+        .from("Task")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+
+      console.log("--- fetchTasks Response ---");
+      console.log("Fetched Tasks Data:", fetchedTasks);
+      console.log("Fetch Tasks Error:", error);
+
+      if (error) {
+        console.error("Error fetching tasks:", error.message);
+        setTasks([]);
+      } else if (fetchedTasks) {
+        setTasks(fetchedTasks);
+        console.log(`Fetched ${fetchedTasks.length} tasks.`);
+      } else {
+        console.warn(
+          "fetchTasks returned null or undefined data, setting tasks to empty array."
+        );
+        setTasks([]);
+      }
+    };
+
+    // DBからスケジュールを取得するuseEffect
+    const fetchSchedules = async () => {
+      if (!user) {
+        console.log("fetchSchedules skipped: user is null");
+        return;
+      }
+      console.log("fetchSchedules called for user:", user.id);
+
+      const { data: fetchedSchedules, error } = await supabase
+        .from("Schedule")
+        .select("*")
+        .eq("user_id", user.id)
+        // schedule_date_time でソート
+        .order("schedule_date_time", { ascending: true });
+
+      console.log("--- fetchSchedules Response ---");
+      console.log("Fetched Schedules Data:", fetchedSchedules);
+      console.log("Fetch Schedules Error:", error);
+
+      if (error) {
+        console.error("Error fetching schedules:", error.message);
+        setSchedules([]);
+      } else if (fetchedSchedules) {
+        setSchedules(fetchedSchedules as Schedule[]);
+        console.log(`Fetched ${fetchedSchedules.length} schedules.`);
+      } else {
+        console.warn(
+          "fetchSchedules returned null or undefined data, setting schedules to empty array."
+        );
+        setSchedules([]);
+      }
+    };
+
+    // ★ キャラクタープロファイル取得処理を追加
+    const fetchCharacterProfile = async () => {
+      // ★ ユーザーがいない場合はローディング完了として終了 (Main useEffect で制御するため不要)
+      // if (!user) { ... }
+
+      // ★ ローディング開始は Main useEffect で行う
+
+      try {
+        // ★ user が null の可能性は Main useEffect で排除されているはずだが念のためチェック
+        if (!user) {
+          console.warn(
+            "fetchCharacterProfile called unexpectedly with null user."
+          );
+          setNeedsSetup(true);
+          return; // 処理中断
+        }
+
+        const { data: profile, error } = await supabase
+          .from("CharacterProfile")
+          .select("*")
+          .eq("user_id", user.id)
+          .single();
+
+        console.log("--- fetchCharacterProfile Response ---");
+        console.log("Profile Data:", profile);
+        console.log("Profile Error:", error);
+
+        if (error && error.code !== "PGRST116") {
+          // PGRST116: No rows found
+          console.error("Error fetching character profile:", error.message);
+          setNeedsSetup(true);
+        } else if (profile) {
+          console.log("Character profile found:", profile);
+          setCharacter(
+            (profile.character_type as ReturnType<
+              typeof useCharacter
+            >["character"]) || "cat"
+          );
+          setCharacterPersonality(
+            (profile.character_personality as string) || "friendly"
+          );
+          setCharacterAttitude("friendly");
+          setCharacterProfile(profile);
+          setNeedsSetup(false);
+        } else {
+          console.log("No character profile found, needs setup");
+          setNeedsSetup(true);
+          // ★★★ ここでの質問追加ロジックは削除 ★★★
+        }
+      } catch (fetchError) {
+        // 予期せぬエラーをキャッチ
+        console.error(
+          "Unexpected error fetching character profile:",
+          fetchError
+        );
+        setNeedsSetup(true); // エラー時は初期設定が必要と判断
+        // ★★★ ここでの質問追加ロジックは削除 ★★★
+      } finally {
+        setIsProfileLoading(false); // ★ 成功/失敗/エラーに関わらずローディング完了
+      }
+    };
+
+    if (isLoggedIn && user) {
+      console.log("User is logged in, fetching data...");
+      setIsProfileLoading(true); // ★ プロファイル取得前にローディング開始
+      fetchTasks();
+      fetchSchedules();
+      fetchCharacterProfile(); // ★ プロファイル取得も実行 (内部で finally でローディング完了)
+    } else {
+      console.log(
+        "User is not logged in or user object is null, skipping data fetch."
+      );
+      setTasks([]);
+      setSchedules([]);
+      setNeedsSetup(true); // ★ 未ログイン時も初期設定が必要
+      setIsProfileLoading(false); // ★ 未ログイン時はローディング完了とする
     }
-  }, [setupComplete, setupStep, messages.length, setupQuestions]);
+    // ★ 依存配列を修正: supabase は通常変更されないため削除、必要なセッターのみ残す
+    // ★ setCharacterProfile, setIsProfileLoading を依存配列に追加
+  }, [
+    isLoggedIn,
+    user,
+    setCharacter,
+    setCharacterPersonality,
+    setCharacterAttitude,
+    setNeedsSetup,
+    setupQuestions,
+    setCharacterProfile,
+    setIsProfileLoading,
+    supabase,
+  ]);
+
+  // ★ 初期設定の質問を表示するための useEffect (再導入)
+  useEffect(() => {
+    // プロファイル読み込み完了後(!isProfileLoading)に、
+    // 初期設定が必要(needsSetup)で、ログイン済み(user)で、
+    // プロファイルが実際に存在せず(characterProfile === null)、
+    // かつ最初の挨拶メッセージのみ表示されている(messages.length === 1)場合
+    if (
+      !isProfileLoading &&
+      needsSetup &&
+      user &&
+      characterProfile === null &&
+      messages.length === 1
+    ) {
+      console.log(
+        ">>> useEffect [Setup Question]: Conditions met, adding setup question."
+      );
+      setMessages((prevMessages) => {
+        // 念のため、重複追加を防ぐ
+        if (!prevMessages.some((msg) => msg.id === "setup-q1")) {
+          return [
+            ...prevMessages,
+            {
+              id: "setup-q1",
+              content: setupQuestions[0],
+              sender: "character",
+              timestamp: new Date(),
+            },
+          ];
+        }
+        return prevMessages;
+      });
+    }
+    // 依存配列には、条件判定に使用する state を含める
+    // user と characterProfile はオブジェクトなので、その存在有無を示す boolean や ID を使う方が安定する場合があるが、
+    // ここでは読み込み完了後の状態変化をトリガーとするため、isProfileLoading と needsSetup を主軸にする
+  }, [
+    isProfileLoading,
+    needsSetup,
+    user,
+    characterProfile,
+    messages,
+    setupQuestions,
+  ]); // messages も依存配列に含め、メッセージ追加後の再評価を防ぐためのチェックを内部で行う
 
   // ログインしていない場合はローディング表示
   if (!isLoggedIn) {
@@ -492,14 +943,14 @@ export default function Home() {
       <AppHeader
         username={username}
         character={character}
-        setCharacter={setCharacter}
+        setCharacter={handleCharacterChange} // ★ 元の setCharacter の代わりに新しいハンドラーを渡す
         handleLogout={handleLogout}
       />
 
       <div className="flex flex-1 overflow-hidden">
         <AdminPanel
           tasks={tasks}
-          schedules={schedules}
+          schedules={schedules} // schedules をそのまま渡す (AdminPanel側でカラム名を使うように修正が必要)
           completeTask={completeTask}
           insertCommand={insertCommand}
           sidebarOpen={sidebarOpen}
@@ -518,7 +969,8 @@ export default function Home() {
           selectedCommandIndex={selectedCommandIndex}
           insertCommand={insertCommand}
           inputRef={inputRef}
-          setupComplete={setupComplete}
+          // setupComplete={setupComplete} // needsSetup に置き換え
+          needsSetup={needsSetup} // ★ props 変更
           showScheduleAssist={showScheduleAssist}
           scheduleDate={scheduleDate}
           scheduleTime={scheduleTime}
@@ -527,7 +979,7 @@ export default function Home() {
           setScheduleTime={setScheduleTime}
           setScheduleTitle={setScheduleTitle}
           setShowScheduleAssist={setShowScheduleAssist}
-          confirmSchedule={confirmSchedule}
+          confirmSchedule={confirmSchedule} // これは useScheduleAssist のものなので、DB連携とは別
           timeOptions={timeOptions}
         />
       </div>

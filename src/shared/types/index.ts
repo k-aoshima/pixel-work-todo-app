@@ -1,18 +1,4 @@
-export interface Task {
-  id: string
-  title: string
-  completed: boolean
-  createdAt: Date
-}
-
-// スケジュール型定義
-export interface Schedule {
-  id: string
-  title: string
-  date: Date
-  time: string
-  createdAt: Date
-}
+// ★ コメントアウトされた Task と Schedule の型定義を削除
 
 // キャラクターの気分
 export type CharacterMood = "happy" | "sad" | "angry" | "neutral"
@@ -35,4 +21,3 @@ export interface MessageAnalysis {
   keywords: string[]
   intensity: number
 }
-

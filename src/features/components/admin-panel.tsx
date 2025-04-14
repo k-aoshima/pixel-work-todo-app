@@ -17,12 +17,18 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/features/ui/collapsible";
-import type { Task, Schedule } from "@/shared/types";
+// import type { Task, Schedule } from "@/shared/types"; // 削除済み
+import type { Database } from "@/app/types/database.types"; // Database型をインポート
+// import type { Schedule } from "@/shared/types"; // この行を削除
+
+// Task型とSchedule型をDatabaseから取得
+type Task = Database["public"]["Tables"]["Task"]["Row"];
+type Schedule = Database["public"]["Tables"]["Schedule"]["Row"];
 
 interface AdminPanelProps {
   tasks: Task[];
   schedules: Schedule[];
-  completeTask: (title: string) => void;
+  completeTask: (id: number) => void; // 引数をid: numberに変更
   insertCommand: (command: string) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
@@ -128,23 +134,23 @@ export function AdminPanel({
               ) : (
                 <ul className="space-y-1">
                   {tasks
-                    .filter((task) => !task.completed)
+                    .filter((task) => !task.is_completed) // is_completed に変更
                     .map((task) => (
                       <li
                         key={task.id}
                         className="task-item flex items-center gap-2 p-2 rounded-md"
                       >
                         <Checkbox
-                          id={task.id}
-                          checked={task.completed}
-                          onCheckedChange={() => completeTask(task.title)}
+                          id={`task-${task.id}`} // idを文字列に変更
+                          checked={task.is_completed} // is_completed に変更
+                          onCheckedChange={() => completeTask(task.id)} // 引数を task.id に変更
                           className="border-muted-foreground data-[state=checked]:bg-primary data-[state=checked]:border-primary"
                         />
                         <label
-                          htmlFor={task.id}
+                          htmlFor={`task-${task.id}`} // htmlForを文字列に変更
                           className="text-xs flex-1 cursor-pointer"
                         >
-                          {task.title}
+                          {task.task} {/* task に変更 */}
                         </label>
                       </li>
                     ))}
@@ -191,9 +197,50 @@ export function AdminPanel({
                     >
                       <Clock className="h-3 w-3 mt-0.5 text-primary" />
                       <div className="text-xs flex-1">
-                        <div className="font-medium">{schedule.title}</div>
+                        {/* schedule_name を使用 */}
+                        <div className="font-medium">
+                          {schedule.schedule_name}
+                        </div>
                         <div className="text-muted-foreground">
-                          {schedule.date.toLocaleDateString()} {schedule.time}
+                          {/* schedule_date_time (ISO 8601形式) を YYYY-MM-DD HH:MM 形式で表示 */}
+                          {(() => {
+                            const dateTimeString = schedule.schedule_date_time;
+                            if (dateTimeString) {
+                              try {
+                                const dateObj = new Date(dateTimeString);
+                                // 無効な日付でないかチェック
+                                if (isNaN(dateObj.getTime())) {
+                                  return "無効な日時";
+                                }
+                                const year = dateObj.getFullYear();
+                                const month = (dateObj.getMonth() + 1)
+                                  .toString()
+                                  .padStart(2, "0"); // 月は0から始まる
+                                const day = dateObj
+                                  .getDate()
+                                  .toString()
+                                  .padStart(2, "0");
+                                const hours = dateObj
+                                  .getHours()
+                                  .toString()
+                                  .padStart(2, "0");
+                                const minutes = dateObj
+                                  .getMinutes()
+                                  .toString()
+                                  .padStart(2, "0");
+                                return `${year}-${month}-${day} ${hours}:${minutes}`;
+                              } catch (e) {
+                                console.error(
+                                  "Error formatting date:",
+                                  dateTimeString,
+                                  e
+                                );
+                                return "日時形式エラー";
+                              }
+                            } else {
+                              return "日時未設定";
+                            }
+                          })()}
                         </div>
                       </div>
                     </li>
